@@ -103,7 +103,6 @@ W_FAMILY_SIMILAR = 6         # typo-level agreement
 W_FAMILY_CONFLICT = -25      # suppressive, not a veto (see below)
 W_GIVEN_EXACT = 15
 W_GIVEN_PREFIX = 10          # "Jun" vs "Jun Wei" — truncation, not a different person
-W_GIVEN_SIMILAR = 8
 W_GIVEN_INITIAL = 5          # "J." vs "Jamal": compatible, but ~1/20 of names share an initial
 W_GIVEN_CONFLICT = -25       # suppressive, not a veto (see below)
 W_LOCALPART_NAME_DERIVED = 8  # both local parts derive from the same person name
@@ -118,10 +117,31 @@ W_COUNTRY_EXACT = 4
 # Residual risk: a false NEGATIVE for a nickname pair with weak contact evidence. Documented
 # in the README; the fix is a diminutive lexicon or phonetic key.
 
-# Similarity cut-offs for the fuzzy comparisons above (difflib SequenceMatcher ratio).
-SIM_FAMILY_SIMILAR = 0.88    # tight: surnames are short, so fuzzy matching them is risky
-SIM_GIVEN_SIMILAR = 0.85
-SIM_GIVEN_CONFLICT = 0.75    # below this, two *full* given names are treated as conflicting
+# Similarity cut-offs (difflib SequenceMatcher ratio).
+#
+# There is no positive "fuzzy given name" band, and that is deliberate. Measured on real
+# name pairs, the two populations overlap almost entirely:
+#
+#   same name, different spelling   Mike/Michael 0.55 · Yusuf/Youssef 0.67 · Sofia/Sophia 0.73
+#                                   Sergey/Sergei 0.83 · Katherine/Catherine 0.89
+#   different people, similar names Eric/Erik 0.75 · Ana/Anna 0.86 · Jon/John 0.86
+#                                   Alan/Allan 0.89 · Sara/Sarah 0.89
+#
+# String similarity therefore cannot tell a spelling variant from a different name, and a
+# positive band would reward Ana/Anna as evidence of a duplicate. So given names get three
+# zones: clearly compatible (exact / prefix / initial) scores, clearly different penalises,
+# and everything between earns nothing in either direction. An honest zero beats a
+# confident guess.
+SIM_GIVEN_CONFLICT = 0.60    # below this no reading as the same name survives
+
+# A string prefix only counts as a shortening ("Chris"/"Christopher") when the longer form
+# is substantially longer. "Sara"/"Sarah" is a prefix too, but a one-character tail is a
+# spelling variant — and those are uninformative, per the ranges above.
+MIN_GIVEN_PREFIX_LEN = 4     # shorter forms ("Ben", "Dan") are too ambiguous to score
+MIN_GIVEN_PREFIX_GAP = 3     # characters the longer form must add
+SIM_FAMILY_SIMILAR = 0.90    # typo-level only: 'Rasmusen'/'Rasmussen' (0.94) yes, 'Smith'/'Smyth' (0.80) no
+MIN_FAMILY_LEN_FOR_FUZZY = 4  # 'Oh'/'Koh', 'Li'/'Liu', 'Ng'/'Ang' all score 0.80 yet are
+                              # different surnames; on short names only equality counts
 SIM_LOCALPART_SIMILAR = 0.80
 SIM_COMPANY_SIMILAR = 0.60   # token-set overlap, applied after legal-suffix stripping
 
