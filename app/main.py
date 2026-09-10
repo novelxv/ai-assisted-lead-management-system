@@ -18,12 +18,22 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status as http_status
 
 from app import config, db, loader, normalize as nz, repository
+from app.dedupe.pipeline import find_duplicates
+from app.ingest import ingest_submission
+from app.llm import get_client
 from app.models import (
     DashboardResponse,
+    DedupeRequest,
+    DedupeResponse,
+    DuplicateRef,
+    FormSubmission,
+    GroupOut,
+    IngestResult,
     LeadDetail,
     LeadListResponse,
     LeadOut,
     LeadPatch,
+    PairOut,
     SourceExtractRequest,
     SourceExtractResponse,
 )
@@ -225,10 +235,92 @@ def _stored_source(lead):
 @app.post("/source/extract", response_model=SourceExtractResponse, tags=["source"])
 def extract(payload: SourceExtractRequest) -> SourceExtractResponse:
     """Classify arbitrary note text. Exposed so the extractor is directly demonstrable."""
-    from app.llm import get_client
-
     result = extract_source(payload.text, client=get_client())
     return SourceExtractResponse(**vars(result))
+
+
+# --------------------------------------------------------------------------------------
+# Ingest
+# --------------------------------------------------------------------------------------
+
+
+@app.post("/leads/ingest", response_model=IngestResult, tags=["leads"])
+def ingest(conn: Conn, submission: FormSubmission, response: Response) -> IngestResult:
+    """Accept a website form submission; update the matching lead or create a new one.
+
+    Returns 200 when an existing lead was updated and 201 when a new one was created, so a
+    caller can tell the two apart without inspecting the body.
+    """
+    outcome = ingest_submission(conn, submission, client=get_client())
+    response.status_code = (
+        http_status.HTTP_200_OK if outcome.action == "updated" else http_status.HTTP_201_CREATED
+    )
+    return IngestResult(
+        action=outcome.action,
+        lead_id=outcome.lead.id,
+        matched_by=outcome.matched_by,
+        score=outcome.score,
+        confidence=outcome.confidence,
+        reasons=outcome.reasons,
+        changed_fields=outcome.changed_fields,
+        possible_duplicates=[
+            DuplicateRef(
+                lead_id=lead.id,
+                display_name=lead.display_name,
+                score=score.score,
+                confidence=score.confidence,
+                reasons=score.reasons,
+            )
+            for lead, score in outcome.possible_duplicates
+        ],
+        lead=LeadDetail.from_lead(outcome.lead),
+    )
+
+
+# --------------------------------------------------------------------------------------
+# Deduplication
+# --------------------------------------------------------------------------------------
+
+
+@app.post("/leads/dedupe-candidates", response_model=DedupeResponse, tags=["dedupe"])
+def dedupe_candidates(conn: Conn, payload: DedupeRequest | None = None) -> DedupeResponse:
+    """Groups of likely duplicates, ranked, each with the evidence behind it.
+
+    Nothing is merged. Groups are suggestions; `review_pairs` holds the cases the system
+    deliberately refuses to call either way.
+    """
+    request = payload or DedupeRequest()
+    result = find_duplicates(
+        repository.all_leads(conn),
+        client=get_client(),
+        min_score=request.min_score,
+        include_review=request.include_review,
+    )
+    return DedupeResponse(
+        groups=[
+            GroupOut(
+                lead_ids=[lead.id for lead in group.leads],
+                summaries=[lead.summary() for lead in group.leads],
+                score=group.score,
+                confidence=group.confidence,
+                reasons=group.reasons,
+                has_internal_conflict=group.has_internal_conflict,
+            )
+            for group in result.groups[: request.limit]
+        ],
+        review_pairs=[
+            PairOut(
+                lead_ids=(pair.left.id, pair.right.id),
+                summaries=(pair.left.summary(), pair.right.summary()),
+                score=pair.score.score,
+                confidence=pair.score.confidence,
+                reasons=pair.score.reasons,
+                adjudication=pair.adjudication,
+            )
+            for pair in result.review_pairs[: request.limit]
+        ],
+        stats=result.stats,
+    )
 
 
 # --------------------------------------------------------------------------------------
