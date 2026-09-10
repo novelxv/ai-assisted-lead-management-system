@@ -148,19 +148,31 @@ SIM_COMPANY_SIMILAR = 0.60   # token-set overlap, applied after legal-suffix str
 # --------------------------------------------------------------------------------------
 # Duplicate detection — bands
 # --------------------------------------------------------------------------------------
-# Chosen from what evidence a band should REQUIRE, then sanity-checked against the data:
+# Each floor is derived from what evidence the band should REQUIRE, then checked against
+# the data. The check is a sanity test, not the derivation.
 #
-#   high   >= 80  Requires a contact key (email 45 / phone 40) plus corroborating name
-#                 agreement. Nothing reaches 80 on name + company + country alone (max 44).
-#   medium 40-79  Genuine ambiguity: enough agreement to be worth a human's time, not enough
-#                 to act on. Identical name at the same employer with no contact-detail
-#                 agreement lands here (44), as does a duplicate whose phone was changed (62).
-#   low     < 40  Dropped.
+#   high   >= 80  Must require a contact key. Email (45) or phone (40) plus corroborating
+#                 name agreement clears it; name + company + country + date together reach
+#                 only 66, so no amount of soft agreement can get there. That structural
+#                 property is the point of the number.
 #
-# `medium` is never merged and never auto-matched on ingest.
+#   medium 35-79  "A human should look at this." An exact given + family name match is 27,
+#                 so the floor sits just below 27 + two independent weak corroborations
+#                 (e.g. both local parts spelling that name, +8, and a shared country, +4
+#                 = 39). Requiring 40 would demand three corroborations before a human is
+#                 even told, which is too strict for a band whose only action is "review".
+#                 Lands here: the same full name at a different employer (a job change, or
+#                 two different people), and a duplicate whose phone was changed.
+#
+#   low     < 35  Dropped.
+#
+# Checked against the seed data: colleagues who share an employer and a surname peak at 25,
+# comfortably clear of the review floor, and the pairs that do land in review are exactly
+# the same-name-different-employer cases. `medium` is never merged and never auto-matched
+# on ingest.
 
 BAND_HIGH_MIN = 80
-BAND_MEDIUM_MIN = 40
+BAND_MEDIUM_MIN = 35
 
 BandName = Literal["high", "medium", "low"]
 
