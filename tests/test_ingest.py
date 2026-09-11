@@ -112,7 +112,11 @@ def test_a_real_new_person_is_created(conn, submissions) -> None:
 
 
 def test_ingesting_the_whole_real_file_splits_cleanly(conn, submissions) -> None:
-    """End to end over all 90: no false merges, no missed returning leads."""
+    """End to end over all 90: the observed split, and nothing silently merged.
+
+    This records behaviour rather than accuracy - the dataset does not say which submissions
+    ought to have matched, so the assertion is that every match came from an exact email hit.
+    """
     before = repository.count_leads(conn, LeadFilters())
     outcomes = [ingest_submission(conn, FormSubmission(**s)) for s in submissions]
 

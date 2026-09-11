@@ -5,7 +5,9 @@ Three tiers, in order:
 1. **Rules** — an ordered pattern table. Handles every phrasing where the originating
    channel is stated outright. On the seed file this resolves 1,958 of 2,049 notes (95.6%).
 2. **LLM** — only for text the rules flag as genuinely ambiguous, or that they cannot read
-   at all. On the seed file that is one distinct note text.
+   at all. On the seed file that is 91 rows, which reduce to 13 distinct note strings once
+   the response cache is applied (the cache keys on the full note, so the same sentence with
+   a different trailing sales remark is a separate entry).
 3. **Fallback** — `Other`, no detail, `needs_review=True`. Never invents anything.
 
 Why this split rather than an LLM over every note: the overwhelming majority of these notes
@@ -65,6 +67,33 @@ _REFERRER_PATTERN = re.compile(
     r"\b(?:referred by|introduced (?:to us )?by|referral from)\s+([^,.;]+)", re.I
 )
 
+# Attribution vocabulary. These patterns exist so that a detail only ever *echoes* a
+# platform the text actually names. Naming Google on a note that says "Facebook" would be a
+# fabricated attribution, and an attribution is exactly the kind of field someone later
+# reports on without re-reading the note.
+_GOOGLE_ADS_PATTERN = re.compile(r"\bgoogle\s+ads?\b|\badwords\b|\bgoogle\s+adwords\b", re.I)
+_PAID_SEARCH_PATTERN = re.compile(r"\bpaid search\b|\bppc\b|\bsem\b|\bsearch ads?\b", re.I)
+
+# Platforms are matched, never assumed; anything not listed simply yields a generic detail.
+_AD_PLATFORMS = (
+    (re.compile(r"\blinked-?in\b", re.I), "LinkedIn"),
+    (re.compile(r"\bfacebook\b|\bmeta ads?\b", re.I), "Facebook"),
+    (re.compile(r"\binstagram\b", re.I), "Instagram"),
+    (re.compile(r"\btiktok\b", re.I), "TikTok"),
+    (re.compile(r"\byoutube\b", re.I), "YouTube"),
+    (re.compile(r"\breddit\b", re.I), "Reddit"),
+    (re.compile(r"\btwitter\b|\bx\.com\b", re.I), "Twitter/X"),
+)
+
+_SEARCH_ENGINES = (
+    (re.compile(r"\bgoogle\w*\b", re.I), "Google search"),
+    (re.compile(r"\bbing\b", re.I), "Bing search"),
+    (re.compile(r"\bduck\s?duck\s?go\b", re.I), "DuckDuckGo search"),
+    (re.compile(r"\byahoo\b", re.I), "Yahoo search"),
+    (re.compile(r"\byandex\b", re.I), "Yandex search"),
+    (re.compile(r"\bbaidu\b", re.I), "Baidu search"),
+)
+
 
 def _clean_fragment(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip(" .,-")
@@ -102,6 +131,33 @@ def _extract_event(text: str) -> str | None:
 def _with_page(base: str, text: str) -> str:
     page = _extract_page(text)
     return f"{base} → {page}" if page else base
+
+
+def _paid_detail(text: str) -> str:
+    """Describe a paid touchpoint using only the platform the note actually names.
+
+    The note says the lead came from an ad; it does not necessarily say whose ad. Defaulting
+    to Google would quietly invent an attribution, and a sponsored LinkedIn post would be
+    reported as paid search. So: name Google only when Google is named, echo any other
+    platform the text mentions, and otherwise stay generic.
+    """
+    if _GOOGLE_ADS_PATTERN.search(text):
+        base = "Paid search (Google Ads)"
+    else:
+        platform = next((name for pattern, name in _AD_PLATFORMS if pattern.search(text)), None)
+        if platform:
+            base = f"Paid social ({platform})"
+        elif _PAID_SEARCH_PATTERN.search(text):
+            base = "Paid search"
+        else:
+            base = "Paid advertising"
+    return _with_page(base, text)
+
+
+def _organic_detail(text: str) -> str:
+    """Describe an organic search touchpoint, naming the engine only if the note does."""
+    engine = next((name for pattern, name in _SEARCH_ENGINES if pattern.search(text)), None)
+    return _with_page(engine or "Organic search", text)
 
 
 def _event_detail(text: str) -> str:
@@ -208,7 +264,7 @@ RULES: tuple[Rule, ...] = (
             re.I,
         ),
         channel="Other",
-        detail=lambda t: _with_page("Paid search (Google Ads)", t),
+        detail=_paid_detail,
     ),
     Rule(
         # Must precede website: these notes name a landing page too, but search came first.
@@ -219,7 +275,7 @@ RULES: tuple[Rule, ...] = (
             re.I,
         ),
         channel="Organic Search",
-        detail=lambda t: _with_page("Google search", t),
+        detail=_organic_detail,
     ),
     Rule(
         name="linkedin",
@@ -309,7 +365,13 @@ def _from_llm_response(response: dict, evidence: str | None, method: str) -> Sou
             return None
         detail = _clean_fragment(detail)[:MAX_DETAIL_LENGTH] or None
 
-    confident = bool(response.get("confident", False))
+    # Booleans must be actual booleans. `bool("false")` is True, so coercing here would turn
+    # a model that said it was unsure into a confident answer — the exact opposite of what
+    # it reported. A malformed field means the response is not trustworthy, so it is dropped.
+    confident = response.get("confident")
+    if not isinstance(confident, bool):
+        return None
+
     return SourceExtraction(
         channel=channel,
         detail=detail,

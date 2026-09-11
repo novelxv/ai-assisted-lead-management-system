@@ -243,12 +243,23 @@ def find_duplicates(
             verdict = adjudicate_pair(
                 pair.left.summary(), pair.right.summary(), pair.score.reasons, client
             )
-            if verdict is None:
+            same = verdict.get("same_person") if verdict else None
+            confident = verdict.get("confident") if verdict else None
+            # Both must be real booleans. `bool("false")` is True, so coercing a malformed
+            # response would flip "different people, not confident" into a confident merge
+            # suggestion. A response we cannot read is treated as no answer: the pair stays
+            # surfaced for a human rather than carrying a misleading verdict.
+            if not (isinstance(same, bool) and isinstance(confident, bool)):
+                if verdict is not None:
+                    logger.warning(
+                        "Discarding malformed adjudication for %s/%s: %r",
+                        pair.left.id,
+                        pair.right.id,
+                        verdict,
+                    )
                 resolved.append(pair)
                 continue
             adjudicated += 1
-            same = bool(verdict.get("same_person"))
-            confident = bool(verdict.get("confident"))
             note = verdict.get("reason") or ""
             label = f"llm: {'same person' if same else 'different people'}"
             label += " (confident)" if confident else " (uncertain)"

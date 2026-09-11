@@ -112,7 +112,7 @@ W_COUNTRY_EXACT = 4
 
 # Why the name-conflict weights suppress rather than veto:
 # nicknames and transliterations are real ("Mike"/"Michael" scores ~0.55 similarity), so a hard
-# veto would silently drop true duplicates. -25 means a conflicting pair cannot reach `high` on
+# veto would silently drop genuine matches. -25 means a conflicting pair cannot reach `high` on
 # one contact key alone, but can still be surfaced for review when several signals agree.
 # Residual risk: a false NEGATIVE for a nickname pair with weak contact evidence. Documented
 # in the README; the fix is a diminutive lexicon or phonetic key.

@@ -4,8 +4,8 @@ A small backend that loads a messy 2,049-row CRM export, exposes a lead API over
 two AI-assisted features: **duplicate detection** and **lead-source extraction** from free-text
 notes.
 
-Python 3.10+ (developed and tested on 3.12) · FastAPI · SQLite (stdlib driver) · ~3,400 lines across `app/` and `scripts/`,
-~1,900 of tests · **224 tests, no required external services**.
+Python 3.10+ (developed and tested on 3.12) · FastAPI · SQLite · no required external
+services.
 
 ---
 
@@ -29,7 +29,7 @@ python -m app.loader --force
 ```
 
 ```bash
-pytest                              # 224 tests, ~3s
+pytest                              # 252 tests, ~7s
 python -m scripts.evaluate_dedupe   # duplicate-detection evaluation report
 ```
 
@@ -63,8 +63,8 @@ suffix vary — `Lotus Finance Studio` / `Lotus Finance Freight Solutions` / `Lo
 
 **Records that only look like duplicates:** 64 pairs share an employer domain *and* a surname
 but have different given names — `Femi` vs `Sophia Diallo`, `Erik` vs `Antoine Silva`. At
-`boatengdigital.com` there are two Mia Johnson records (a real duplicate) sitting beside a
-distinct Diego Johnson. **This is the case the system is built to get right.**
+`boatengdigital.com` there are two Mia Johnson records (a duplicate-looking pair) sitting
+beside a distinct Diego Johnson. **This is the case the system is built to get right.**
 
 **Form submissions** (90): 49 carry an email and phone identical to an existing lead and all
 of them carry the same zero-signal message; 41 are new people, 38 at companies already in the
@@ -296,8 +296,9 @@ That ordering is load-bearing:
 | `Booked a demo … after clicking a google ad.` | `Other` · `Paid search (Google Ads) → Book-a-demo page` | must not be read as `Organic Search` |
 | `Met at the booth during Retail Asia Expo…` (submitted via a web form) | `Event` | first touch beats the form it arrived through |
 
-**2. LLM — the 4.4% the rules flag as ambiguous**, plus any unseen phrasing. Cached by
-normalized text, so on this dataset the ambiguous slice collapses to **one distinct call**.
+**2. LLM — the 4.4% the rules flag as ambiguous**, plus any unseen phrasing. Responses are
+cached by the full note text, so the 91 ambiguous seed rows reduce to **13 distinct strings**
+— the same sentence with a different trailing sales remark is a separate cache entry.
 
 **3. Fallback — `Other`, `detail: null`, `needs_review: true`.** Never invents anything.
 
@@ -327,6 +328,19 @@ and both decisions are visible in the data rather than hidden:
 scan that did not happen is the smallest possible fabrication and exactly the kind that
 destroys trust in an extraction pipeline. All 30 distinct event details across the file
 distinguish a scan, a denied scan, and an unspecified conversation.
+
+The same rule governs attribution, which is the field most likely to be reported on later
+without anyone re-reading the note. A detail only ever names a platform the text itself
+names:
+
+| Note | Detail |
+|---|---|
+| `…after clicking a google ad.` | `Paid search (Google Ads)` |
+| `…clicking a sponsored ad on Facebook.` | `Paid social (Facebook)` |
+| `Clicked a sponsored LinkedIn post…` | `Paid social (LinkedIn)` |
+| `Came via a PPC campaign…` | `Paid search` — generic, no provider invented |
+| `Found us through Bing search…` | `Bing search`, not `Google search` |
+| `Found us through organic search…` | `Organic search` |
 
 The 49 form submissions saying only *"Following up after our earlier conversation, please send
 more info."* return `Other` with `detail: null` and `needs_review: true`. There is no signal
@@ -375,9 +389,12 @@ Three rules keep this consistent with the dedupe philosophy instead of short-cir
 Form metadata is recorded as note context, never used to classify: `form_id`, `form_name` and
 `page_url` contradict each other throughout the real file.
 
-**Verified over all 90 real submissions: 49 updated, 41 created, no false merges.** A returning
-lead who was scanned at a TechCrunch Disrupt booth and later submits a newsletter form keeps
-`source_channel: Event`, keeps its status and owner, and gains an appended note.
+**Across all 90 provided submissions, 49 matched existing records and 41 created new leads**,
+consistent with the exact-contact re-entry pattern observed in the provided data. (That split
+is the observed behaviour, not a verified precision figure — nothing here labels which
+submissions *should* have matched.) A returning lead who was scanned at a TechCrunch Disrupt
+booth and later submits a newsletter form keeps `source_channel: Event`, keeps its status and
+owner, and gains an appended note.
 
 ---
 
@@ -431,7 +448,7 @@ curl -X POST localhost:8000/leads/dedupe-candidates -H 'Content-Type: applicatio
 | Provider / model | Anthropic, `claude-haiku-4-5` (optional `[llm]` extra) |
 | Where | (1) notes the rules flag as ambiguous; (2) `medium`-band duplicate pairs |
 | Why there | Both are genuine judgement calls under missing information. Everything else is deterministic because deterministic is better here |
-| Without credentials | Falls back deterministically and reports `method: "fallback"`. **All 224 tests pass and every endpoint works with no key** |
+| Without credentials | Falls back deterministically and reports `method: "fallback"`. **All 252 tests pass and every endpoint works with no key** |
 | Enable it | `pip install -e ".[llm]"` and set `ANTHROPIC_API_KEY` |
 
 **Two things stated plainly:**
@@ -442,12 +459,20 @@ I deliberately did **not** commit a "cache" of hand-written responses — that w
 simulating model output, and a reviewer could not tell it from the real thing. The runtime
 cache (`.cache/llm_cache.json`) is gitignored and only ever holds genuine responses.
 
-*The cost figure is an estimate, not a measurement.* The ambiguous slice of this dataset
-collapses to **one distinct note text**, so a full pass is ~1 cached call of a few hundred
-tokens — well under $0.01. Actual spend to date: **$0.00**.
+*Actual development spend: **$0.00**, because the live integration was never invoked.*
+Any forward-looking number is an estimate, so here is the call volume rather than a price.
+A full pass over the seed data would make **13 source-extraction calls** — the 91 ambiguous
+rows deduplicated by the response cache, which keys on the whole note (14 across both data
+files). Dedupe adjudication is separate and depends on how many pairs land in the review
+band: **3 on this dataset**, and 0 if `include_review` is off. Both are short
+classification prompts, and both are cached, so a re-run costs nothing.
 
-The response is re-validated against the taxonomy before use: an out-of-taxonomy channel, a
-non-string detail or a malformed body all fall back rather than propagate.
+Every response is re-validated before use: an out-of-taxonomy channel, a non-string detail or
+a malformed body all fall back rather than propagate. Boolean fields (`confident`,
+`same_person`) must be actual booleans — `bool("false")` is `True`, so coercing a string
+would turn a model that reported uncertainty into a confident answer, and in the dedupe path
+would flip "different people" into a merge suggestion. A field that cannot be read is treated
+as no answer, leaving the pair surfaced for a human.
 
 ---
 
@@ -521,11 +546,11 @@ non-string detail or a malformed body all fall back rather than propagate.
 
 ## Testing
 
-**224 tests, ~3 seconds, no network.** Real cases and synthetic cases, because they cover
+**252 tests, ~7 seconds, no network.** Real cases and synthetic cases, because they cover
 different risks.
 
 *Real cases* run against the actual 2,049 rows — every status spelling, both phone formats,
-all three date formats, the real duplicate triples, and the real look-alike pairs
+all three date formats, the duplicate-looking triples, and the real look-alike pairs
 (`Femi`/`Sophia Diallo`, `Mia`/`Diego Johnson`) as named precision tests.
 
 *Synthetic cases* cover what this generated file **does not contain**, which is where an

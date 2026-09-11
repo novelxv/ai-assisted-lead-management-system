@@ -291,7 +291,7 @@ def test_short_family_names_require_exact_equality() -> None:
     ["f.osei", "francescao", "francesca.osei", "fosei", "osei"],
 )
 def test_localpart_recognised_as_derived_from_the_name(local: str) -> None:
-    """The real duplicate group for Francesca Osei uses three of these spellings."""
+    """The duplicate-looking group for Francesca Osei uses three of these spellings."""
     assert nz.localpart_is_name_derived(local, "Francesca", "Osei")
 
 

@@ -39,10 +39,14 @@ class LLMClient(Protocol):
 class ResponseCache:
     """File-backed cache of real responses, keyed by prompt hash.
 
-    Two reasons it exists: the ambiguous slice of this dataset collapses to a single
-    distinct note text, so caching turns ~91 records into one call; and a cached run is
-    reproducible. It is gitignored — a committed cache would be indistinguishable from
-    fabricated model output.
+    Two reasons it exists: the ambiguous notes repeat heavily, so caching collapses many
+    records into far fewer calls; and a cached run is reproducible. It is gitignored — a
+    committed cache would be indistinguishable from fabricated model output.
+
+    Note that the key covers the *whole* prompt, so notes differing only by a trailing sales
+    remark are separate entries. On the seed file the 91 ambiguous rows reduce to 13 distinct
+    strings, not one. Keying on a stripped-down note would cache more aggressively, but it
+    would also hand the model less context than the caller actually has.
     """
 
     def __init__(self, path: Path | None) -> None:

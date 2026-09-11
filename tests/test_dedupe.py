@@ -120,7 +120,7 @@ def test_blocking_recovers_pairs_that_agree_on_phone_and_domain(leads) -> None:
 
 
 # --------------------------------------------------------------------------------------
-# Real duplicates
+# Duplicate-looking records from the real file
 # --------------------------------------------------------------------------------------
 
 
@@ -174,7 +174,7 @@ def test_every_group_member_shares_a_family_name(leads) -> None:
 
 
 # --------------------------------------------------------------------------------------
-# Real non-duplicates — the precision cases
+# Records from the real file that only look alike — the precision cases
 # --------------------------------------------------------------------------------------
 
 
@@ -195,8 +195,12 @@ def test_colleagues_who_share_a_company_and_surname_are_not_duplicates(
     assert result.confidence == "low", f"{description} scored {result.score}"
 
 
-def test_a_real_duplicate_and_a_real_colleague_at_one_company_are_separated(leads) -> None:
-    """boatengdigital.com holds Mia Johnson twice and a distinct Diego Johnson."""
+def test_a_duplicate_looking_pair_and_a_colleague_at_one_company_are_separated(leads) -> None:
+    """boatengdigital.com holds Mia Johnson twice, plus a separately-named Diego Johnson.
+
+    Nothing in the data labels these, so the assertion is about separation: the two Mia
+    records group together and Diego stays out of that group.
+    """
     mia_a, mia_b = _find(leads, "100235417"), _find(leads, "100235418")
     diego = _find(leads, "100235419")
     assert score_pair(mia_a, mia_b).confidence == "high"
@@ -418,6 +422,38 @@ def test_an_unavailable_llm_leaves_the_pair_surfaced_rather_than_dropped() -> No
     result = find_duplicates(ambiguous, client=silent)
     assert len(result.review_pairs) == 1
     assert result.review_pairs[0].adjudication is None
+
+
+@pytest.mark.parametrize(
+    "verdict",
+    [
+        {"same_person": "false", "confident": "true", "reason": "x"},
+        {"same_person": "true", "confident": "true", "reason": "x"},
+        {"same_person": True, "confident": "false", "reason": "x"},
+        {"same_person": 1, "confident": 1, "reason": "x"},
+        {"same_person": True, "reason": "no confidence field"},
+        {"reason": "no booleans at all"},
+    ],
+)
+def test_a_non_boolean_verdict_is_discarded_rather_than_coerced(verdict: dict) -> None:
+    """`bool("false")` is True.
+
+    Coercing would flip "different people, not confident" into a confident merge
+    suggestion. A verdict that cannot be read is treated as no answer, leaving the pair
+    surfaced for a human — the same behaviour as an unavailable model.
+    """
+    spy = FakeLLM(response=verdict)
+    ambiguous = [
+        make_lead("1", "Wei Chen", "w.chen@acme.com", "+65 8000 1111"),
+        make_lead("2", "Wei Chen", "wei.chen2@acme.com", "+65 9000 2222"),
+    ]
+    result = find_duplicates(ambiguous, client=spy)
+
+    assert len(spy.calls) == 1, "the model should still have been consulted"
+    assert result.stats["llm_adjudicated_pairs"] == 0
+    assert len(result.review_pairs) == 1
+    assert result.review_pairs[0].adjudication is None
+    assert result.groups == []
 
 
 def test_the_llm_verdict_never_promotes_a_pair_into_a_group() -> None:

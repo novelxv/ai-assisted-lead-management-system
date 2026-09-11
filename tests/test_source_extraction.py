@@ -89,6 +89,66 @@ def test_paid_ad_is_not_reported_as_organic_search() -> None:
     assert result.detail == "Paid search (Google Ads) → Book-a-demo page"
 
 
+@pytest.mark.parametrize(
+    "note,expected",
+    [
+        # Google named -> Google may be named.
+        ("Booked a demo via the book-a-demo page after clicking a google ad.",
+         "Paid search (Google Ads) → Book-a-demo page"),
+        ("Came in from an AdWords campaign.", "Paid search (Google Ads)"),
+        # A different platform named -> echo that platform, never Google.
+        ("Booked a demo after clicking a sponsored ad on Facebook.", "Paid social (Facebook)"),
+        ("Clicked a sponsored LinkedIn post and booked a demo.", "Paid social (LinkedIn)"),
+        # No platform named -> stay generic rather than pick one.
+        ("Came via a PPC campaign then hit the pricing page.", "Paid search"),
+        ("Paid search ad, landed on the pricing page.", "Paid search → Pricing page"),
+        ("Retargeting ad brought them back to the homepage.", "Paid advertising → Homepage"),
+    ],
+)
+def test_paid_detail_names_only_the_platform_the_note_names(note: str, expected: str) -> None:
+    """A paid note says an ad was clicked; it does not always say whose ad.
+
+    Defaulting to Google would invent an attribution — and attribution is precisely the
+    field someone later reports on without re-reading the note.
+    """
+    result = extract_source(note)
+    assert result.channel == "Other"
+    assert result.detail == expected
+
+
+@pytest.mark.parametrize(
+    "note",
+    [
+        "Booked a demo after clicking a sponsored ad on Facebook.",
+        "Clicked a sponsored LinkedIn post and booked a demo.",
+        "Came via a PPC campaign then hit the pricing page.",
+        "Retargeting ad brought them back to the homepage.",
+    ],
+)
+def test_google_is_never_attributed_to_a_note_that_does_not_mention_it(note: str) -> None:
+    assert "Google" not in (extract_source(note).detail or "")
+
+
+@pytest.mark.parametrize(
+    "note,expected",
+    [
+        ("Googled us and ended up on the pricing page before booking a demo.",
+         "Google search → Pricing page"),
+        ("Found us through organic google search then landed on the case study page.",
+         "Google search → Case study page"),
+        ("Found us through Bing search and landed on the pricing page.",
+         "Bing search → Pricing page"),
+        ("Found us through organic search and landed on the contact page.",
+         "Organic search → Contact page"),
+    ],
+)
+def test_organic_detail_names_only_the_engine_the_note_names(note: str, expected: str) -> None:
+    """'Found us through Bing search' must not be reported as a Google search."""
+    result = extract_source(note)
+    assert result.channel == "Organic Search"
+    assert result.detail == expected
+
+
 def test_event_beats_the_form_it_arrived_through() -> None:
     """A real submission: an event conversation submitted later via the website."""
     result = extract_source(
@@ -213,6 +273,21 @@ def test_llm_response_outside_the_taxonomy_is_rejected() -> None:
     assert result.method == "fallback"
 
 
+@pytest.mark.parametrize("confident", ["false", "true", 1, 0, None, "yes"])
+def test_a_non_boolean_confidence_flag_is_rejected(confident: Any) -> None:
+    """`bool("false")` is True.
+
+    Coercing the field would turn a model that reported uncertainty into a confident
+    answer — the precise opposite of what it said. A field we cannot read means the
+    response is not trustworthy, so it is dropped in favour of the documented fallback.
+    """
+    spy = FakeLLM(response={"channel": "LinkedIn", "detail": "A post", "confident": confident})
+    result = extract_source("Saw our post about replacing hubspot and commented.", client=spy)
+    assert result.channel == "Other"
+    assert result.method == "fallback"
+    assert result.needs_review
+
+
 @pytest.mark.parametrize(
     "response",
     [
@@ -291,6 +366,21 @@ def test_every_real_note_yields_a_channel_inside_the_taxonomy(seed_rows, submiss
     texts = [row["Notes"] for row in seed_rows] + [s["message"] for s in submissions]
     for text in texts:
         assert extract_source(text).channel in config.SOURCE_CHANNELS
+
+
+def test_the_ambiguous_slice_matches_the_documented_call_volume(seed_rows, submissions) -> None:
+    """Pins the numbers the README quotes for LLM call volume.
+
+    The response cache keys on the whole note, so the same sentence with a different
+    trailing sales remark is a separate call. Counting distinct *rows* instead of distinct
+    *strings* would understate the cost, which is why this is asserted rather than assumed.
+    """
+    seed = [row["Notes"] for row in seed_rows if extract_source(row["Notes"]).method == "fallback"]
+    subs = [s["message"] for s in submissions if extract_source(s["message"]).method == "fallback"]
+
+    assert len(seed) == 91
+    assert len({text.strip() for text in seed}) == 13
+    assert len({text.strip() for text in seed + subs}) == 14
 
 
 def test_no_real_note_gets_a_detail_without_evidence(seed_rows, submissions) -> None:
