@@ -15,7 +15,7 @@ from __future__ import annotations
 import itertools
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from app import config
 from app.dedupe.scoring import PairScore, score_pair
@@ -278,18 +278,3 @@ def find_duplicates(
     return DedupeResult(
         groups=groups, review_pairs=review if include_review else [], stats=stats
     )
-
-
-def best_matches(lead: Lead, candidates: Iterable[Lead]) -> list[CandidatePair]:
-    """Score one lead against a set of candidates, best first.
-
-    Used by ingest so a form submission is matched with exactly the same logic that finds
-    duplicates in the stored data, rather than a second, subtly different matcher.
-    """
-    scored = [
-        CandidatePair(left=lead, right=other, score=score_pair(lead, other))
-        for other in candidates
-        if other.id != lead.id
-    ]
-    scored.sort(key=lambda pair: -pair.score.score)
-    return scored

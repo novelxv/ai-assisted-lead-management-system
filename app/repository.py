@@ -6,7 +6,6 @@ matching. Every value is bound as a parameter; nothing is interpolated into SQL.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -124,12 +123,22 @@ def find_by_family_and_country(
     return [Lead.from_row(row) for row in rows]
 
 
+def _column_names(conn: sqlite3.Connection) -> set[str]:
+    return {row["name"] for row in conn.execute("PRAGMA table_info(leads)")}
+
+
 def update_fields(
     conn: sqlite3.Connection, lead_id: str, changes: dict[str, Any]
 ) -> Lead | None:
     """Apply a column-level update. Callers decide the policy; this just writes."""
     if not changes:
         return get_lead(conn, lead_id)
+    # Column names are the one part of the statement that cannot be a bound parameter, so
+    # they are checked against the real schema. Today every caller passes internal
+    # constants; this makes that a guarantee rather than a convention.
+    unknown = set(changes) - _column_names(conn)
+    if unknown:
+        raise ValueError(f"unknown lead columns: {sorted(unknown)}")
     payload = dict(changes)
     payload["updated_ts"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     assignments = ", ".join(f"{column} = :{column}" for column in payload)
@@ -203,7 +212,3 @@ def export_rows(leads: list[Lead]) -> list[dict[str, Any]]:
             }
         )
     return rows
-
-
-def serialise_raw(raw: dict[str, Any] | None) -> str | None:
-    return json.dumps(raw, ensure_ascii=False) if raw is not None else None

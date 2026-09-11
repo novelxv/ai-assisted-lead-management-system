@@ -162,6 +162,18 @@ def test_patch_on_a_missing_lead_returns_404(mutable_client) -> None:
     assert mutable_client.patch("/leads/nope", json={"status": "New"}).status_code == 404
 
 
+def test_patch_preserves_the_line_structure_of_notes(mutable_client) -> None:
+    """Ingest appends one timestamped line per touchpoint.
+
+    If PATCH collapsed whitespace the way every other field does, editing a note would
+    flatten a lead's whole history into a run-on paragraph.
+    """
+    multiline = "Spoke on the phone.\n[2026-06-12 · web form · /pricing] Wants a quote."
+    body = mutable_client.patch("/leads/100234811", json={"notes": multiline}).json()
+    assert body["notes"].count("\n") == 1
+    assert body["notes"] == multiline
+
+
 def test_patch_leaves_unmentioned_fields_alone(mutable_client) -> None:
     before = mutable_client.get("/leads/100234813").json()
     after = mutable_client.patch("/leads/100234813", json={"status": "Closed Lost"}).json()

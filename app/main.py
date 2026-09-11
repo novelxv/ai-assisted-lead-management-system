@@ -15,7 +15,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response, status as http_status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 
 from app import config, db, loader, normalize as nz, repository
 from app.dedupe.pipeline import find_duplicates
@@ -39,8 +39,6 @@ from app.models import (
 )
 from app.repository import LeadFilters
 from app.source_extraction import extract_source, preserve_confident_source
-
-logger = logging.getLogger(__name__)
 
 _connection: sqlite3.Connection | None = None
 
@@ -83,7 +81,7 @@ def _validated_status(raw: str | None) -> str | None:
     canonical = nz.normalize_status(raw)
     if canonical is None:
         raise HTTPException(
-            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail=(
                 f"Unknown status {raw!r}. Allowed values (case-insensitive): "
                 f"{list(config.LEAD_STATUSES)}"
@@ -166,7 +164,7 @@ def get_lead(conn: Conn, lead_id: str) -> LeadDetail:
     lead = repository.get_lead(conn, lead_id)
     if lead is None:
         raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND, detail=f"Lead {lead_id!r} not found"
+            status_code=404, detail=f"Lead {lead_id!r} not found"
         )
     return LeadDetail.from_lead(lead)
 
@@ -182,7 +180,7 @@ def patch_lead(conn: Conn, lead_id: str, patch: LeadPatch) -> LeadDetail:
     lead = repository.get_lead(conn, lead_id)
     if lead is None:
         raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND, detail=f"Lead {lead_id!r} not found"
+            status_code=404, detail=f"Lead {lead_id!r} not found"
         )
 
     changes: dict[str, object] = {}
@@ -191,9 +189,9 @@ def patch_lead(conn: Conn, lead_id: str, patch: LeadPatch) -> LeadDetail:
     if patch.owner is not None:
         changes["owner"] = patch.owner
     if patch.notes is not None:
-        notes = nz.collapse_ws(patch.notes)
+        notes = nz.normalize_notes(patch.notes)
         changes["notes"] = notes
-        stored = _stored_source(lead)
+        stored = lead.stored_source()
         chosen = preserve_confident_source(stored, extract_source(notes))
         if chosen is not stored:
             changes.update(
@@ -211,20 +209,6 @@ def patch_lead(conn: Conn, lead_id: str, patch: LeadPatch) -> LeadDetail:
     return LeadDetail.from_lead(updated)
 
 
-def _stored_source(lead):
-    """Rebuild the stored extraction so it can be compared with a fresh one."""
-    from app.source_extraction import SourceExtraction
-
-    if lead.source_channel is None:
-        return None
-    return SourceExtraction(
-        channel=lead.source_channel,
-        detail=lead.source_detail,
-        confidence=lead.source_confidence or config.SOURCE_CONFIDENCE_LOW,
-        method=lead.source_method or "unknown",
-        evidence=None,
-        needs_review=lead.source_needs_review,
-    )
 
 
 # --------------------------------------------------------------------------------------
@@ -253,7 +237,7 @@ def ingest(conn: Conn, submission: FormSubmission, response: Response) -> Ingest
     """
     outcome = ingest_submission(conn, submission, client=get_client())
     response.status_code = (
-        http_status.HTTP_200_OK if outcome.action == "updated" else http_status.HTTP_201_CREATED
+        200 if outcome.action == "updated" else 201
     )
     return IngestResult(
         action=outcome.action,

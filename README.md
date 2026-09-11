@@ -5,7 +5,7 @@ two AI-assisted features: **duplicate detection** and **lead-source extraction**
 notes.
 
 Python 3.10+ · FastAPI · SQLite (stdlib driver) · ~2,400 lines of application code, ~2,200 of
-tests · **221 tests, no required external services**.
+tests · **224 tests, no required external services**.
 
 ---
 
@@ -29,7 +29,7 @@ python -m app.loader --force
 ```
 
 ```bash
-pytest                              # 221 tests, ~3s
+pytest                              # 224 tests, ~3s
 python -m scripts.evaluate_dedupe   # duplicate-detection evaluation report
 ```
 
@@ -431,7 +431,7 @@ curl -X POST localhost:8000/leads/dedupe-candidates -H 'Content-Type: applicatio
 | Provider / model | Anthropic, `claude-haiku-4-5` (optional `[llm]` extra) |
 | Where | (1) notes the rules flag as ambiguous; (2) `medium`-band duplicate pairs |
 | Why there | Both are genuine judgement calls under missing information. Everything else is deterministic because deterministic is better here |
-| Without credentials | Falls back deterministically and reports `method: "fallback"`. **All 221 tests pass and every endpoint works with no key** |
+| Without credentials | Falls back deterministically and reports `method: "fallback"`. **All 224 tests pass and every endpoint works with no key** |
 | Enable it | `pip install -e ".[llm]"` and set `ANTHROPIC_API_KEY` |
 
 **Two things stated plainly:**
@@ -521,7 +521,7 @@ non-string detail or a malformed body all fall back rather than propagate.
 
 ## Testing
 
-**221 tests, ~3 seconds, no network.** Real cases and synthetic cases, because they cover
+**224 tests, ~3 seconds, no network.** Real cases and synthetic cases, because they cover
 different risks.
 
 *Real cases* run against the actual 2,049 rows — every status spelling, both phone formats,

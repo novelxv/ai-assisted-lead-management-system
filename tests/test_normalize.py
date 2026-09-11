@@ -305,6 +305,24 @@ def test_localpart_derivation_handles_hyphenated_given_names() -> None:
 
 
 # --------------------------------------------------------------------------------------
+# Notes
+# --------------------------------------------------------------------------------------
+
+
+def test_notes_keep_their_line_structure() -> None:
+    """Notes are the one field that legitimately spans lines: ingest appends one entry per
+    touchpoint, so collapsing them would destroy a lead's history."""
+    value = "  Met at   the booth.  \n\n  [2026-06-12] Followed up.  "
+    assert nz.normalize_notes(value) == "Met at the booth.\n\n[2026-06-12] Followed up."
+
+
+def test_notes_normalization_handles_blank_input() -> None:
+    assert nz.normalize_notes("") == ""
+    assert nz.normalize_notes(None) == ""
+    assert nz.normalize_notes("   \n  ") == ""
+
+
+# --------------------------------------------------------------------------------------
 # Dates
 # --------------------------------------------------------------------------------------
 

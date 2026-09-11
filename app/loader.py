@@ -102,7 +102,7 @@ def build_lead_params(row: dict[str, str], now: str) -> dict[str, Any]:
     local, domain = nz.split_email(email)
     phone_digits = nz.normalize_phone(row.get("Phone Number"))
     company = nz.collapse_ws(row.get("Company Name"))
-    notes = nz.collapse_ws(row.get("Notes"))
+    notes = nz.normalize_notes(row.get("Notes"))
     source = extract_source(notes)
 
     return {

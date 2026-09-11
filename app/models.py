@@ -93,6 +93,25 @@ class Lead:
         parts = [self.display_name or "(no name)", self.company or "(no company)", self.email, self.phone]
         return " | ".join(p for p in parts if p)
 
+    def stored_source(self):
+        """The saved extraction, rebuilt so it can be compared against a fresh one.
+
+        Both PATCH and ingest need this to honour the first-touch rule, so it lives here
+        rather than being reimplemented at each call site.
+        """
+        from app.source_extraction import SourceExtraction
+
+        if self.source_channel is None:
+            return None
+        return SourceExtraction(
+            channel=self.source_channel,
+            detail=self.source_detail,
+            confidence=self.source_confidence or config.SOURCE_CONFIDENCE_LOW,
+            method=self.source_method or "unknown",
+            evidence=None,
+            needs_review=self.source_needs_review,
+        )
+
 
 # --------------------------------------------------------------------------------------
 # Responses

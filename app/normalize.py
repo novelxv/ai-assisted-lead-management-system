@@ -30,6 +30,19 @@ def collapse_ws(value: str | None) -> str:
     return _WS_RE.sub(" ", value).strip()
 
 
+def normalize_notes(value: str | None) -> str:
+    """Tidy note text while preserving line structure.
+
+    Notes are the one field that legitimately spans lines: ingest appends a timestamped
+    entry per touchpoint, so collapsing whitespace the way every other field does would
+    flatten a lead's entire history into one run-on paragraph.
+    """
+    if not value:
+        return ""
+    lines = [_WS_RE.sub(" ", line).strip() for line in value.splitlines()]
+    return "\n".join(lines).strip()
+
+
 def fold_ascii(value: str) -> str:
     """Casefold and strip diacritics, so 'Müller' and 'Muller' compare equal."""
     decomposed = unicodedata.normalize("NFKD", value)

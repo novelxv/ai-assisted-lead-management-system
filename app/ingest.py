@@ -261,7 +261,7 @@ def merge_into(
     changes["notes"] = f"{existing.notes}\n{appended}".strip() if existing.notes else appended
 
     # Original source is a first-touch fact; only fill it when we never really knew it.
-    stored = _stored_source(existing)
+    stored = existing.stored_source()
     chosen = preserve_confident_source(stored, source)
     if chosen is not stored:
         changes.update(
@@ -285,17 +285,6 @@ def merge_into(
     return changes
 
 
-def _stored_source(lead: Lead) -> SourceExtraction | None:
-    if lead.source_channel is None:
-        return None
-    return SourceExtraction(
-        channel=lead.source_channel,
-        detail=lead.source_detail,
-        confidence=lead.source_confidence or config.SOURCE_CONFIDENCE_LOW,
-        method=lead.source_method or "unknown",
-        evidence=None,
-        needs_review=lead.source_needs_review,
-    )
 
 
 def _new_lead_params(
