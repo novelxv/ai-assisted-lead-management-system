@@ -4,7 +4,7 @@ A small backend that loads a messy 2,049-row CRM export, exposes a lead API over
 two AI-assisted features: **duplicate detection** and **lead-source extraction** from free-text
 notes.
 
-Python 3.10+ · FastAPI · SQLite (stdlib driver) · ~3,400 lines across `app/` and `scripts/`,
+Python 3.10+ (developed and tested on 3.12) · FastAPI · SQLite (stdlib driver) · ~3,400 lines across `app/` and `scripts/`,
 ~1,900 of tests · **224 tests, no required external services**.
 
 ---
