@@ -18,6 +18,7 @@ from app import config, normalize as nz, repository
 from app.dedupe.pipeline import blocking_keys, candidate_pairs, find_duplicates
 from app.dedupe.scoring import score_pair
 from app.models import Lead
+from tests.conftest import FakeLLM
 
 
 def make_lead(
@@ -371,18 +372,6 @@ def test_oversized_blocks_are_skipped_rather_than_expanded() -> None:
 # --------------------------------------------------------------------------------------
 # The LLM adjudication tier
 # --------------------------------------------------------------------------------------
-
-
-class FakeLLM:
-    """Test double. Records calls so a test can prove the tier was not reached."""
-
-    def __init__(self, response=None):
-        self.response = response
-        self.calls: list[tuple[str, str]] = []
-
-    def complete_json(self, *, system: str, user: str):
-        self.calls.append((system, user))
-        return self.response
 
 
 def test_the_llm_is_never_asked_about_a_decided_pair() -> None:

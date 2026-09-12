@@ -193,19 +193,47 @@ MAX_GROUP_SIZE_FOR_CONFLICT_CHECK = 10
 # --------------------------------------------------------------------------------------
 # LLM
 # --------------------------------------------------------------------------------------
-# Used for exactly one thing: notes the deterministic rules cannot resolve (see
+# Used for exactly two things: notes the deterministic rules cannot resolve (see
 # app/source_extraction.py), plus adjudicating `medium`-band duplicate pairs. When no API key
 # is present the system falls back deterministically and says so via the `method` field.
+#
+# Model choice: the deterministic rules already handle ~96% of notes and settle every
+# duplicate pair outside the review band, so the model only ever sees a small, genuinely
+# ambiguous slice. That makes a fast, inexpensive model the right fit — a larger one would
+# cost more to reach the same "I cannot tell from this text" answer.
 
-LLM_MODEL = os.environ.get("LLM_MODEL", "claude-haiku-4-5-20251001")
-LLM_MAX_TOKENS = 256
+LLM_PROVIDER = "Google Gemini API"
+LLM_SDK = "google-genai"
+
+# `gemini-2.5-flash` was the intended model, but the Gemini API refuses it for newly issued
+# keys ("no longer available to new users"). The rationale is unchanged and is what actually
+# drives the choice: a fast, inexpensive Flash-class model is the right fit when it only ever
+# sees the small ambiguous slice the deterministic rules could not settle.
+#
+# This default is the model the live validation pass was actually run against, so the shipped
+# configuration and the measured behaviour are the same thing. Override with LLM_MODEL.
+# See the README for what was observed on the alternatives.
+LLM_MODEL = os.environ.get("LLM_MODEL", "gemini-3.5-flash")
+
+LLM_MAX_OUTPUT_TOKENS = 512
 LLM_TEMPERATURE = 0.0  # classification, not generation: we want reproducible output
-LLM_TIMEOUT_SECONDS = 20.0
+LLM_TIMEOUT_SECONDS = 30.0
+
+# Gemini models reason before answering by default. These are short classification calls
+# against an explicit schema, so that reasoning buys nothing: measured on this workload,
+# "minimal" produced the same verdicts using 0 thinking tokens instead of ~330 per call.
+# Set to "" to send no thinking preference at all.
+LLM_THINKING_LEVEL = os.environ.get("LLM_THINKING_LEVEL", "minimal")
+
+LLM_API_KEY_ENV = "GEMINI_API_KEY"
 
 
 def llm_api_key() -> str | None:
-    """Read the key at call time so tests and reviewers can set it after import."""
-    return os.environ.get("ANTHROPIC_API_KEY") or None
+    """Read the key at call time so tests and reviewers can set it after import.
+
+    Environment only — never a file, so a credential cannot be committed by accident.
+    """
+    return os.environ.get(LLM_API_KEY_ENV) or None
 
 
 # --------------------------------------------------------------------------------------

@@ -13,23 +13,7 @@ import pytest
 
 from app import config
 from app.source_extraction import SourceExtraction, extract_source, preserve_confident_source
-
-
-class FakeLLM:
-    """An explicit test double.
-
-    It fabricates nothing: it returns whatever a test tells it to, and records its calls so
-    a test can assert the LLM tier was *not* reached. Real model responses are never
-    committed to this repo.
-    """
-
-    def __init__(self, response: dict[str, Any] | None = None) -> None:
-        self.response = response
-        self.calls: list[tuple[str, str]] = []
-
-    def complete_json(self, *, system: str, user: str) -> dict[str, Any] | None:
-        self.calls.append((system, user))
-        return self.response
+from tests.conftest import FakeLLM
 
 
 # --------------------------------------------------------------------------------------

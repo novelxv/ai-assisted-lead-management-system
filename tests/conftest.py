@@ -13,12 +13,54 @@ import json
 import shutil
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import config, db, loader
 from app.main import app, get_conn
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_llm_cache(tmp_path_factory):
+    """Point the LLM response cache at a throwaway path for the whole test session.
+
+    Without this, a test that builds a real client with the default cache writes into the
+    developer's `.cache/llm_cache.json` and then reads its own answer back on the next run —
+    which is exactly how a test that mocks the network can still end up depending on it.
+    """
+    original = config.LLM_CACHE_PATH
+    config.LLM_CACHE_PATH = tmp_path_factory.mktemp("llm_cache") / "cache.json"
+    yield
+    config.LLM_CACHE_PATH = original
+
+
+class FakeLLM:
+    """An explicit test double for the LLM tier.
+
+    It fabricates nothing: it returns whatever a test tells it to, and records the prompts
+    it was given so a test can assert the tier was *not* reached, or inspect what the model
+    would have been shown. Real model responses are never committed to this repo.
+    """
+
+    def __init__(self, response: dict[str, Any] | None = None) -> None:
+        self.response = response
+        self.calls: list[tuple[str, str]] = []
+        self.schemas: list[type] = []
+
+    def complete_json(self, *, system: str, user: str, schema: type) -> dict[str, Any] | None:
+        self.calls.append((system, user))
+        self.schemas.append(schema)
+        return self.response
+
+    @property
+    def last_user_prompt(self) -> str:
+        return self.calls[-1][1]
+
+    @property
+    def last_system_prompt(self) -> str:
+        return self.calls[-1][0]
 
 
 @pytest.fixture(scope="session")
