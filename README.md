@@ -1,8 +1,12 @@
-# AI-Assisted Mini Lead Management System
+# AI-Assisted Lead Management System
 
-A small backend that loads a messy 2,049-row CRM export, exposes a lead API over it, and adds
-two AI-assisted features: **duplicate detection** and **lead-source extraction** from free-text
-notes.
+**A rules-first lead management system for messy CRM data, with explainable duplicate
+detection and optional Gemini-assisted ambiguity resolution.**
+
+It loads a 2,049-row CRM export into a FastAPI-backed application, normalizes inconsistent
+data, identifies likely duplicate records without brute-force pairwise comparison, extracts
+structured lead sources from free-text notes, and serves a lightweight console for exploring
+the results.
 
 Python 3.10+ (developed and tested on 3.12) · FastAPI · SQLite · no required external
 services.
@@ -17,8 +21,10 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
 
-Open **<http://127.0.0.1:8000/docs>**. This is a backend service, so the interactive docs
-are the only UI.
+| | |
+|---|---|
+| **<http://127.0.0.1:8000/>** | The console — dashboard, lead explorer, duplicate detection and source extraction |
+| **<http://127.0.0.1:8000/docs>** | Interactive OpenAPI documentation for the underlying API |
 
 The database seeds itself on first run: if `leads.db` does not exist, the app loads
 `data/leads_seed.csv` and logs a column-coverage report. There is no separate setup step. To
@@ -53,6 +59,36 @@ values.
 **The application works without an API key.** Notes the deterministic rules cannot resolve
 fall back to `Other` with `needs_review: true`, and duplicate pairs in the review band are
 surfaced without an adjudication. See [LLM usage](#llm-usage).
+
+---
+
+## The console
+
+A small browser UI at `/`, kept deliberately thin: it holds no business logic, and every
+figure it shows comes from the endpoints documented below. Filtering, pagination, scoring and
+extraction all happen server-side.
+
+| | |
+|---|---|
+| **Overview** | Total leads, statuses in use, and how many leads still need a source review |
+| **Distributions** | Leads by status and by *extracted* source channel, from `GET /dashboard` |
+| **Lead explorer** | Search and filter by status, owner and country, paginated, via `GET /leads` |
+| **Lead detail** | Full record in a dialog, with the untouched source row behind a collapsed disclosure |
+| **Duplicate candidates** | `POST /leads/dedupe-candidates`, showing each group's score, band and the reasons behind it |
+| **Source extraction** | `POST /source/extract` on arbitrary note text, reporting which path resolved it |
+
+Two things it deliberately does not do: there is no merge button, because nothing is merged
+automatically; and the duplicate score is labelled as a ranking heuristic rather than a
+probability, matching what it actually is.
+
+Plain HTML, CSS and vanilla JavaScript served by FastAPI — no build step, no npm, no
+framework, and no CDN. The two charts are CSS bars rather than a charting dependency: two
+categorical breakdowns do not justify one, and horizontal bars keep labels like
+"Marketing Qualified Lead" readable without rotation. The status filter is populated from the
+keys of `GET /dashboard`, so the taxonomy stays defined in one place — the backend.
+
+The console needs no API key. Notes the rules cannot resolve display as `Other` with a
+"needs review" marker, exactly as the API returns them.
 
 ---
 
@@ -106,10 +142,11 @@ app/
   dedupe/pipeline.py    blocking -> candidate pairs -> grouping
   ingest.py             submission -> match (reuses the dedupe scorer) -> merge policy
   main.py               routes
+  static/               console shell, stylesheet and client script
 scripts/evaluate_dedupe.py
 ```
 
-Three decisions worth defending:
+Four decisions worth defending:
 
 **SQLite via the stdlib driver, no ORM.** 2,049 rows and one table. A server would be
 infrastructure with no payoff; an ORM would add a dependency and a layer of indirection
@@ -124,6 +161,11 @@ you can see exactly what normalization did.
 **`difflib`, not `rapidfuzz`.** After blocking there are ~390 pairs to compare, so speed is
 irrelevant and a dependency is not worth it. Every fuzzy comparison routes through one
 `similarity()` helper, so swapping the implementation is a one-function change.
+
+**Static files, not a frontend stack.** The console is three files served by `StaticFiles`.
+A framework would add a build step, a dependency tree and a second place for logic to live,
+to render one dashboard and one table. Jinja2 was not added either: the shell is static and
+every value arrives by `fetch`, so there is nothing to template.
 
 ---
 
@@ -437,6 +479,7 @@ All filters are case-insensitive and compare normalized values. Ordering is dete
 | `POST /source/extract` | Classify arbitrary text |
 | `GET /dashboard` | Counts by status and by **extracted** channel, plus how many need review |
 | `GET /health` | Liveness |
+| `GET /` | The console. Not part of the API contract, so it is excluded from the OpenAPI schema |
 
 ```bash
 curl 'localhost:8000/leads?status=qualified&country=India&limit=2'
@@ -654,7 +697,7 @@ reports contract validity and call volume, and the observations are qualitative.
 ## Testing
 
 The suite is offline and deterministic — no network, no credentials, and the LLM tier is
-mocked throughout (314 tests, a few seconds). The Gemini SDK ships in the optional `[llm]`
+mocked throughout (323 tests, a few seconds). The Gemini SDK ships in the optional `[llm]`
 extra, so the handful of tests that drive the SDK skip when it is not installed; everything
 else, including the LLM contract validation and prompt-boundary tests, runs either way.
 
@@ -678,6 +721,10 @@ approach tuned to it would break:
 - an out-of-taxonomy LLM response → rejected; a silent LLM → pair still surfaced
 - a non-boolean `confident` / `same_person` → rejected rather than coerced
 - prompt-injection text → fenced as data, and the boundary tags cannot be closed early
+
+The console gets a thin set of route tests only — it is served, its assets resolve, it stays
+out of the OpenAPI schema, and mounting it did not shadow any API route. The API tests remain
+the correctness suite; the UI was exercised manually against a freshly loaded database.
 
 Tests assert behaviour, not internals: no test asserts a score margin, because fitting a
 margin to this dataset is exactly the mistake the evaluation section warns about.
