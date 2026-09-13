@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import shutil
 import sqlite3
 from pathlib import Path
@@ -20,6 +21,20 @@ from fastapi.testclient import TestClient
 
 from app import config, db, loader
 from app.main import app, get_conn
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_live_llm_calls():
+    """Guarantee the suite is offline regardless of the developer's environment.
+
+    A local .env is loaded at import time, so a real key would otherwise be visible to any
+    code path that builds a client — `/source/extract` calls `get_client()` — and the suite
+    would quietly start making billable network calls.
+    """
+    original = os.environ.pop(config.LLM_API_KEY_ENV, None)
+    yield
+    if original is not None:
+        os.environ[config.LLM_API_KEY_ENV] = original
 
 
 @pytest.fixture(autouse=True, scope="session")

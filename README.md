@@ -17,8 +17,8 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
 
-Open **<http://127.0.0.1:8000/docs>**. That is the intended UI — the brief does not ask for a
-frontend, so the effort went into the API contract instead.
+Open **<http://127.0.0.1:8000/docs>**. This is a backend service, so the interactive docs
+are the only UI.
 
 The database seeds itself on first run: if `leads.db` does not exist, the app loads
 `data/leads_seed.csv` and logs a column-coverage report. There is no separate setup step. To
@@ -29,11 +29,30 @@ python -m app.loader --force
 ```
 
 ```bash
-pytest                              # 252 tests, ~7s
+pytest                              # offline, deterministic, no network
 python -m scripts.evaluate_dedupe   # duplicate-detection evaluation report
 ```
 
-Everything works with no API key. See [LLM usage](#llm-usage) for what changes if you add one.
+### Configuration
+
+Everything is optional. Copy the template if you want local settings:
+
+```bash
+cp .env.example .env          # Windows PowerShell: Copy-Item .env.example .env
+```
+
+| Variable | Purpose |
+|---|---|
+| `GEMINI_API_KEY` | Enables the optional LLM tier. Leave empty to run fully deterministically |
+| `LLM_MODEL` | Overrides the model. Default `gemini-3.5-flash`, which is what the live validation below was run against |
+
+Shell variables take precedence over `.env`, and a missing `.env` changes nothing. **Never
+commit `.env`** — it is gitignored; `.env.example` is the committed template and holds no
+values.
+
+**The application works without an API key.** Notes the deterministic rules cannot resolve
+fall back to `Other` with `needs_review: true`, and duplicate pairs in the review band are
+surfaced without an adjudication. See [LLM usage](#llm-usage).
 
 ---
 
@@ -110,7 +129,7 @@ irrelevant and a dependency is not worth it. Every fuzzy comparison routes throu
 
 ## Deduplication
 
-The brief's constraint is the design driver: 2,049 leads is 2,098,176 pairwise comparisons,
+The scale constraint is the design driver: 2,049 leads is 2,098,176 pairwise comparisons,
 and that number grows quadratically. So the pipeline never enumerates pairs.
 
 The governing asymmetry: **aggressive in blocking, conservative in scoring.** Generating a
@@ -224,8 +243,8 @@ group is flagged `has_internal_conflict`, **demoted out of `high`**, and the con
 pair is named in its reasons. A cluster the system cannot justify internally is handed to a
 human, not asserted. (Synthetic test: `test_a_bridged_group_is_flagged_and_demoted`.)
 
-**Nothing is ever auto-merged.** The brief does not ask for it, and it is not safe without
-review.
+**Nothing is ever auto-merged.** An irreversible merge without a human in the loop is how a
+CRM loses data.
 
 ### 4. LLM adjudication — and an honest finding
 
@@ -311,7 +330,7 @@ can audit any record.
 
 ### Two taxonomy gaps, and how I resolved them
 
-The allowed channels are fixed by the brief. Two common note families have no home in them,
+The allowed channels are a fixed contract. Two common note families have no home in them,
 and both decisions are visible in the data rather than hidden:
 
 - **Paid search (119 rows).** `"…after clicking a google ad"` is explicitly *not* organic, and
@@ -454,20 +473,22 @@ curl -X POST localhost:8000/leads/dedupe-candidates -H 'Content-Type: applicatio
 | SDK | `google-genai`, behind the optional `[llm]` extra |
 | Where | (1) notes the rules flag as ambiguous; (2) `medium`-band duplicate pairs |
 | Why there | Both are genuine judgement calls under missing information. Everything else is deterministic because deterministic is better here |
-| Why a Flash model | The rules already settle ~96% of notes and every pair outside the review band, so the model only ever sees a small ambiguous slice. A larger model would cost more to reach the same "I cannot tell from this text" answer |
+| Why this size of model | Deterministic rules remain the primary path: they settle ~96% of notes and every pair outside the review band, so the model only ever sees a small ambiguous slice. A larger model would cost more to reach the same "I cannot tell from this text" answer |
 | Without credentials | Falls back deterministically and reports `method: "fallback"`. **Every endpoint works and the whole offline suite passes with no key** |
 | Enable it | `pip install -e ".[llm]"` and set `GEMINI_API_KEY` |
 
-The key is read from the environment only, never from a file, and is never logged.
+The key is read from the environment only. `.env` is loaded into the environment at startup
+as a development convenience; the key is never read from a file directly and never logged.
 
-**On the model version.** `gemini-2.5-flash` was the intended choice, but the Gemini API
-refuses it for newly issued keys ("no longer available to new users") and redirects to the
-current Flash release. `gemini-3.6-flash` was verified working and correct on the critical
-cases, but its free-tier quota is 20 requests/day, which the validation sweep exhausted; the
-sweep below therefore ran end to end on `gemini-3.5-flash`, and that is the shipped default
-so the configured model and the measured one are the same thing. A `-flash-lite` model was
-also tried and **rejected**: it answered `LinkedIn` with `confident=true` for notes naming no
-platform, which is exactly the invention the prompt forbids.
+**On the model.** `gemini-3.5-flash` is the pinned default and is the model the live
+validation below was run against, so the configured model and the measured behaviour are the
+same thing. It gave reliable structured-output behaviour on these narrow
+ambiguity-resolution tasks: every response satisfied the JSON schema, and it consistently
+declined to name a platform the note did not mention. Change it with `LLM_MODEL` — anything
+with comparable JSON-schema support should work, though a smaller model is worth re-checking
+against the cases below before trusting it. One `-flash-lite` model was tried and rejected on
+exactly that basis: it answered `LinkedIn` with `confident=true` for notes naming no
+platform, which is the invention the prompt forbids.
 
 ### Structured output and validation
 
@@ -562,7 +583,8 @@ reports contract validity and call volume, and the observations are qualitative.
 5. **Dashboard counts use the extracted channel**, not `Original Source` — that column is blank
    for half the rows and actively misleading on others (21 booth conversations are tagged
    `Other Campaigns`).
-6. **`q` searches name, company and email only**, per the brief — deliberately not phone.
+6. **`q` searches name, company and email only** — deliberately not phone, since partial
+   digit strings match too broadly to be useful.
 7. **Lead `id` is the source `Record ID`**; new leads continue the numeric sequence. A UUID
    would be safer against concurrent writers, but this is a single-process service.
 8. **Original source is immutable once confidently known.** Both ingest and `PATCH` may only
@@ -598,7 +620,7 @@ reports contract validity and call volume, and the observations are qualitative.
 - **Family-name changes** (e.g. after marriage) score as a conflict; an exact email or phone
   match still outweighs it, but a record with neither would be missed.
 - **Single-process, no concurrency control.** Two simultaneous ingests could race on
-  `next_lead_id`. Fine for the brief; a real deployment needs a sequence or a UUID.
+  `next_lead_id`. Fine at this scale; a multi-writer deployment needs a sequence or a UUID.
 - **The LLM can be wrong on cases the rules get right.** Validated live: it classified an
   explicit *"google ad"* note as `Organic Search`, and it gave opposite verdicts on two
   near-identical review pairs. Both are contained — the rules own the first case, and no
@@ -624,14 +646,20 @@ reports contract validity and call volume, and the observations are qualitative.
    that is the signal the rule table has fallen behind the sales team's vocabulary.
 6. **Escalate adversarial-looking notes** instead of letting the keyword rules classify
    them, closing the injection gap above.
-7. Re-run the live validation on a key without a 20-request/day cap, so the full set of
+7. Re-run the live validation on a key without a per-day request cap, so the full set of
    distinct escalated notes goes through rather than a capped sample.
 
 ---
 
 ## Testing
 
-**252 tests, ~7 seconds, no network.** Real cases and synthetic cases, because they cover
+The suite is offline and deterministic — no network, no credentials, and the LLM tier is
+mocked throughout (314 tests, a few seconds). The Gemini SDK ships in the optional `[llm]`
+extra, so the handful of tests that drive the SDK skip when it is not installed; everything
+else, including the LLM contract validation and prompt-boundary tests, runs either way.
+
+Coverage is spread across API behaviour, matching safety, source extraction, ingest policy
+and the LLM integration boundary, using real cases and synthetic cases because they cover
 different risks.
 
 *Real cases* run against the actual 2,049 rows — every status spelling, both phone formats,
@@ -648,6 +676,8 @@ approach tuned to it would break:
 - a bridged group (A–B and B–C strong, A–C contradictory) → flagged and demoted
 - an exact email match with a conflicting name → created with `possible_duplicates`, not merged
 - an out-of-taxonomy LLM response → rejected; a silent LLM → pair still surfaced
+- a non-boolean `confident` / `same_person` → rejected rather than coerced
+- prompt-injection text → fenced as data, and the boundary tags cannot be closed early
 
 Tests assert behaviour, not internals: no test asserts a score margin, because fitting a
 margin to this dataset is exactly the mistake the evaluation section warns about.

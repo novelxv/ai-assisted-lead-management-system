@@ -25,9 +25,10 @@ htmlcov/
 # Runtime LLM response cache — real responses only, never committed
 .cache/
 
-# Secrets
+# Secrets. .env.example carries no values and is committed as a template.
 .env
 .env.*
+!.env.example
 
 # Editor / OS
 .vscode/

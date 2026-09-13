@@ -249,7 +249,7 @@ def test_an_unconfident_llm_answer_stays_flagged_for_review() -> None:
 
 
 def test_llm_response_outside_the_taxonomy_is_rejected() -> None:
-    """The taxonomy is fixed by the spec; a model is not allowed to widen it."""
+    """The taxonomy is a fixed contract; a model is not allowed to widen it."""
     spy = FakeLLM(response={"channel": "Social Media", "detail": "LinkedIn post", "confident": True})
     result = extract_source("Saw our post about replacing hubspot and commented.", client=spy)
     assert result.channel in config.SOURCE_CHANNELS
@@ -288,7 +288,7 @@ def test_malformed_llm_responses_fall_back_safely(response: dict[str, Any]) -> N
 
 
 def test_extraction_is_fully_deterministic_without_a_client() -> None:
-    """A reviewer with no API key still gets a complete, sane answer for every note."""
+    """With no API key every note still gets a complete, sane answer."""
     note = "Saw our post about replacing hubspot and commented."
     first, second = extract_source(note), extract_source(note)
     assert first == second

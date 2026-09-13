@@ -45,7 +45,7 @@ def test_detail_may_be_null_but_must_be_present() -> None:
 
 @pytest.mark.parametrize("channel", ["Social Media", "Paid Search", "website", "", None])
 def test_a_channel_outside_the_taxonomy_is_rejected(channel: Any) -> None:
-    """The taxonomy is fixed by the brief; a model does not get to widen it."""
+    """The taxonomy is a fixed contract; a model does not get to widen it."""
     payload = {"channel": channel, "detail": None, "confident": True}
     assert validate_payload(payload, SourceVerdict) is None
 
@@ -205,7 +205,7 @@ def test_the_source_prompt_states_the_attribution_rules() -> None:
 
 
 def test_no_key_means_no_client(monkeypatch) -> None:
-    """A reviewer without credentials must get the full deterministic system, not an error."""
+    """Running without credentials must yield the full deterministic system, not an error."""
     monkeypatch.delenv(config.LLM_API_KEY_ENV, raising=False)
     assert llm.get_client() is None
 
@@ -233,8 +233,8 @@ except ImportError:  # pragma: no cover - depends on which extras are installed
     _genai = None
 
 # Only the tests that drive the SDK are skipped without it. Everything above — contract
-# validation, response parsing, the prompt trust boundary — is pure Python and must run
-# for every reviewer, with or without the extra.
+# validation, response parsing, the prompt trust boundary — is pure Python and runs with
+# or without the extra installed.
 requires_sdk = pytest.mark.skipif(_genai is None, reason="optional [llm] extra not installed")
 
 
@@ -329,9 +329,9 @@ def test_a_different_prompt_is_not_served_from_cache(gemini) -> None:
 
 def test_the_cache_key_separates_models_and_schemas() -> None:
     """A cached answer produced under different constraints must not be reused."""
-    base = ResponseCache.key("s", "u", "gemini-2.5-flash", "SourceVerdict")
-    assert base != ResponseCache.key("s", "u", "some-other-model", "SourceVerdict")
-    assert base != ResponseCache.key("s", "u", "gemini-2.5-flash", "DedupeVerdict")
+    base = ResponseCache.key("s", "u", "model-a", "SourceVerdict")
+    assert base != ResponseCache.key("s", "u", "model-b", "SourceVerdict")
+    assert base != ResponseCache.key("s", "u", "model-a", "DedupeVerdict")
 
 
 @requires_sdk

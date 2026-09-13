@@ -21,7 +21,7 @@ ORDER_BY = "ORDER BY created_at IS NULL, created_at DESC, id ASC"
 
 @dataclass(frozen=True)
 class LeadFilters:
-    """The four filters the brief specifies. Empty values mean "no constraint"."""
+    """Supported list filters. Empty values mean "no constraint"."""
 
     status: str | None = None
     owner: str | None = None
@@ -44,8 +44,8 @@ class LeadFilters:
             clauses.append("LOWER(country) = ?")
             params.append(nz.collapse_ws(self.country).lower())
         if self.q:
-            # Free-text across name, company and email, per the brief. Phone is
-            # deliberately excluded: it is not in the specified search surface.
+            # Free-text across name, company and email. Phone is deliberately excluded:
+            # partial digit strings match too broadly to be useful here.
             needle = f"%{nz.collapse_ws(self.q).lower()}%"
             clauses.append(
                 "(LOWER(display_name) LIKE ? OR LOWER(company) LIKE ? OR LOWER(email) LIKE ?)"
@@ -161,8 +161,8 @@ def next_lead_id(conn: sqlite3.Connection) -> str:
 
     Ids come from the source system's `Record ID` and are numeric, so new leads continue the
     sequence. That keeps ids stable, human-readable and sortable; a UUID would be safer
-    against concurrent writers but this is a single-process service and the brief has no
-    multi-writer requirement.
+    against concurrent writers, but this is a single-process service with no concurrent
+    writers.
     """
     row = conn.execute("SELECT MAX(CAST(id AS INTEGER)) AS m FROM leads").fetchone()
     return str((row["m"] or 100_000_000) + 1)

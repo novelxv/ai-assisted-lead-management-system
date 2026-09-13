@@ -6,8 +6,8 @@ explicitly with `python -m app.loader --force`.
 The loader reports column coverage rather than quietly discarding columns. Five of the 22
 columns in the export are empty for every single row (`City`, `Original Source Drill-Down 1`,
 `Annual Revenue`, `Marketing contact status`, `GDPR consent`); saying so out loud is more
-useful to a reviewer than a schema that silently omits them, and it is how you would notice
-if a future export started populating one.
+useful than a schema that silently omits them, and it is how you would notice if a future
+export started populating one.
 """
 
 from __future__ import annotations
@@ -192,7 +192,7 @@ def load(
 
 
 def ensure_loaded(conn: sqlite3.Connection) -> None:
-    """Auto-initialise on first run so a reviewer never has to run a separate step."""
+    """Auto-initialise on first run, so starting the app is the only required step."""
     db.init_schema(conn)
     if not db.is_populated(conn):
         logger.info("No leads found; loading seed data from %s", config.SEED_CSV)

@@ -9,8 +9,8 @@ that deterministic code cannot settle:
 Everything else is deterministic, because deterministic is better: cheaper, reproducible,
 explainable and testable. See the README for the measured split.
 
-**Provider.** Google Gemini (`gemini-2.5-flash`) via the official `google-genai` SDK, behind
-the optional `[llm]` extra. Responses are constrained by a JSON schema derived from the
+**Provider.** Google Gemini (`gemini-3.5-flash` by default) via the official `google-genai`
+SDK, behind the optional `[llm]` extra. Responses are constrained by a JSON schema derived from the
 Pydantic contracts below, so the taxonomy is enforced as an enum and `confident` /
 `same_person` arrive as real booleans rather than strings the app would have to guess at.
 Schema-constrained output is not treated as a guarantee: every response is still re-validated
@@ -325,8 +325,8 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
 def get_client() -> LLMClient | None:
     """Build the default client, or None when the LLM tier is unavailable.
 
-    Unavailable is a normal state, not an error: reviewers can run and evaluate the whole
-    system without credentials.
+    Unavailable is a normal state, not an error: the whole system runs without credentials,
+    with unresolved cases taking the deterministic fallback.
     """
     api_key = config.llm_api_key()
     if not api_key:

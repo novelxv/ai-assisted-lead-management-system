@@ -2,8 +2,8 @@
 
 Route handlers stay thin: validation is Pydantic's job (app/models.py), SQL is the
 repository's (app/repository.py) and policy is the matching modules'. The interactive docs
-at /docs are the intended UI — the brief does not ask for a frontend, so the effort went
-into the API contract instead.
+at /docs are the only UI: this is a backend service, so the effort went into the API
+contract instead.
 """
 
 from __future__ import annotations
@@ -218,7 +218,11 @@ def patch_lead(conn: Conn, lead_id: str, patch: LeadPatch) -> LeadDetail:
 
 @app.post("/source/extract", response_model=SourceExtractResponse, tags=["source"])
 def extract(payload: SourceExtractRequest) -> SourceExtractResponse:
-    """Classify arbitrary note text. Exposed so the extractor is directly demonstrable."""
+    """Classify arbitrary note text.
+
+    Exposed for diagnostics and manual use: it is the only way to run the extractor against
+    text that is not already attached to a lead.
+    """
     result = extract_source(payload.text, client=get_client())
     return SourceExtractResponse(**vars(result))
 

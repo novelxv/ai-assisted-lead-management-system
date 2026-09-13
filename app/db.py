@@ -4,9 +4,9 @@ Why SQLite and not Postgres or an in-memory dict: the dataset is ~2,000 rows and
 surface is one table with a handful of filters, so a server would be infrastructure without
 a payoff. A file-backed database still gives real SQL filtering, indexes that make the
 blocking keys cheap, durable PATCH/ingest results across restarts, and a zero-install
-experience for a reviewer. The stdlib driver is used directly rather than an ORM: the schema
-is a single table and the queries are short, so an ORM would add a dependency and a layer of
-indirection without removing any work.
+setup. The stdlib driver is used directly rather than an ORM: the schema is a single table
+and the queries are short, so an ORM would add a dependency and a layer of indirection
+without removing any work.
 """
 
 from __future__ import annotations

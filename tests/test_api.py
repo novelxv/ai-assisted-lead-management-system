@@ -1,7 +1,7 @@
 """API tests.
 
 Run against the real 2,049-row dataset rather than a toy fixture, so filters, pagination
-and export are exercised on the same messy values a reviewer will see.
+and export are exercised against the same messy values the service actually holds.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ def test_pagination_is_deterministic_and_non_overlapping(client) -> None:
 
 
 def test_lead_detail_includes_the_untouched_source_row(client) -> None:
-    """Provenance: a reviewer can see exactly what normalization changed."""
+    """Provenance: the untouched source row stays available for debugging normalization."""
     body = client.get("/leads/100234811").json()
     assert body["display_name"] == "Yuki Aina"
     assert body["status"] == "New"

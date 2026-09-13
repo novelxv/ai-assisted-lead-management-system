@@ -172,7 +172,7 @@ class LeadListResponse(BaseModel):
 
 
 class LeadPatch(BaseModel):
-    """Only the three fields the brief allows to be edited.
+    """The three fields a sales user may edit directly.
 
     `extra="forbid"` turns a typo'd or unsupported field into a 422 rather than a silently
     ignored write, which matters when the caller believes it changed something.

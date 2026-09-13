@@ -35,7 +35,7 @@ MAX_DETAIL_LENGTH = 200
 
 @dataclass(frozen=True)
 class SourceExtraction:
-    """A channel plus everything a reviewer needs to judge whether to trust it."""
+    """A channel plus the provenance needed to judge how far to trust it."""
 
     channel: str
     detail: str | None
@@ -387,7 +387,7 @@ def extract_source(text: str | None, client: LLMClient | None = None) -> SourceE
 
     `client` is injected so callers control whether the LLM tier is live. Passing None (the
     default) keeps the function fully deterministic, which is what the loader, the tests and
-    a credential-free reviewer all get.
+    any run without credentials get.
     """
     cleaned = (text or "").strip()
     if not cleaned:

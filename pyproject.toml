@@ -11,6 +11,9 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "pydantic>=2.6",
+    # Reads a local .env in development. Tiny, no transitive dependencies, and correct
+    # about quoting rules that a hand-rolled parser tends to get wrong.
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

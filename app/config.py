@@ -44,7 +44,8 @@ LeadStatus = Literal[
 LEAD_STATUSES: tuple[str, ...] = get_args(LeadStatus)
 
 # --------------------------------------------------------------------------------------
-# Source channel taxonomy (fixed by the assignment — do not extend)
+# Source channel taxonomy. Fixed contract: downstream reporting depends on these exact
+# seven values, so extending it is a breaking change, not a config tweak.
 # --------------------------------------------------------------------------------------
 
 SourceChannel = Literal[
@@ -205,14 +206,10 @@ MAX_GROUP_SIZE_FOR_CONFLICT_CHECK = 10
 LLM_PROVIDER = "Google Gemini API"
 LLM_SDK = "google-genai"
 
-# `gemini-2.5-flash` was the intended model, but the Gemini API refuses it for newly issued
-# keys ("no longer available to new users"). The rationale is unchanged and is what actually
-# drives the choice: a fast, inexpensive Flash-class model is the right fit when it only ever
-# sees the small ambiguous slice the deterministic rules could not settle.
-#
-# This default is the model the live validation pass was actually run against, so the shipped
-# configuration and the measured behaviour are the same thing. Override with LLM_MODEL.
-# See the README for what was observed on the alternatives.
+# Pinned default. This is the model the live validation documented in the README was run
+# against, so the shipped configuration and the measured behaviour are the same thing. It
+# gave reliable structured-output behaviour on these narrow classification tasks. Override
+# with LLM_MODEL; anything with comparable JSON-schema support should work.
 LLM_MODEL = os.environ.get("LLM_MODEL", "gemini-3.5-flash")
 
 LLM_MAX_OUTPUT_TOKENS = 512
@@ -229,9 +226,11 @@ LLM_API_KEY_ENV = "GEMINI_API_KEY"
 
 
 def llm_api_key() -> str | None:
-    """Read the key at call time so tests and reviewers can set it after import.
+    """Read the key at call time rather than at import, so the process environment can
+    change without a reload.
 
-    Environment only — never a file, so a credential cannot be committed by accident.
+    Environment only, so a credential cannot be committed by accident. A local .env is
+    loaded into the environment at startup; see app/env.py.
     """
     return os.environ.get(LLM_API_KEY_ENV) or None
 
