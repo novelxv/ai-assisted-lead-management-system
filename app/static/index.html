@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lead Management Console</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead__inner">
+      <div>
+        <h1 class="masthead__title">AI-Assisted Lead Management System</h1>
+        <p class="masthead__subtitle">Rules-first matching and source extraction over a CRM export</p>
+      </div>
+      <a class="masthead__link" href="/docs">API documentation</a>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <!-- ------------------------------------------------------------ KPIs -->
+    <section aria-labelledby="overview-heading">
+      <h2 id="overview-heading" class="visually-hidden">Overview</h2>
+      <div class="kpi-row" id="kpis">
+        <p class="state" id="kpi-state">Loading overview…</p>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------- charts -->
+    <section class="chart-grid" aria-labelledby="charts-heading">
+      <h2 id="charts-heading" class="visually-hidden">Distributions</h2>
+
+      <div class="card">
+        <div class="card__header">
+          <h3 class="card__title">Leads by status</h3>
+        </div>
+        <div id="chart-status"><p class="state">Loading…</p></div>
+      </div>
+
+      <div class="card">
+        <div class="card__header">
+          <h3 class="card__title">Leads by source channel</h3>
+          <p class="card__note">Extracted from notes, not the source column</p>
+        </div>
+        <div id="chart-source"><p class="state">Loading…</p></div>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------- lead explorer -->
+    <section class="card" aria-labelledby="explorer-heading">
+      <div class="card__header">
+        <h3 class="card__title" id="explorer-heading">Lead explorer</h3>
+        <p class="card__note">Filtering is performed by the API</p>
+      </div>
+
+      <form class="filters" id="filters">
+        <div class="field">
+          <label class="field__label" for="f-q">Search</label>
+          <input type="search" id="f-q" name="q" placeholder="Name, company or email">
+        </div>
+        <div class="field">
+          <label class="field__label" for="f-status">Status</label>
+          <select id="f-status" name="status">
+            <option value="">All statuses</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="f-owner">Owner</label>
+          <input type="text" id="f-owner" name="owner" placeholder="Any owner">
+        </div>
+        <div class="field">
+          <label class="field__label" for="f-country">Country</label>
+          <input type="text" id="f-country" name="country" placeholder="Any country">
+        </div>
+        <div class="field">
+          <span class="field__label">&nbsp;</span>
+          <div class="pager__buttons">
+            <button type="submit" class="primary">Apply</button>
+            <button type="reset">Clear</button>
+          </div>
+        </div>
+      </form>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Company</th>
+              <th scope="col">Status</th>
+              <th scope="col">Source</th>
+              <th scope="col" class="col-optional">Owner</th>
+              <th scope="col" class="col-optional">Country</th>
+            </tr>
+          </thead>
+          <tbody id="lead-rows"></tbody>
+        </table>
+      </div>
+      <div id="lead-state"><p class="state">Loading leads…</p></div>
+
+      <div class="pager">
+        <span class="pager__status" id="pager-status"></span>
+        <div class="pager__buttons">
+          <button type="button" id="prev-page" disabled>Previous</button>
+          <button type="button" id="next-page" disabled>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------- duplicate demo -->
+    <section class="card" aria-labelledby="dedupe-heading">
+      <div class="card__header">
+        <div>
+          <h3 class="card__title" id="dedupe-heading">Duplicate candidates</h3>
+          <p class="card__note">
+            Suggestions only. Nothing is merged automatically, and the score is a ranking
+            heuristic rather than a probability.
+          </p>
+        </div>
+        <button type="button" class="primary" id="run-dedupe">Find duplicate candidates</button>
+      </div>
+      <div id="dedupe-output">
+        <p class="state state--inline">Run the detector to see grouped candidates and the evidence behind each one.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ extraction demo -->
+    <section class="card" aria-labelledby="extract-heading">
+      <div class="card__header">
+        <div>
+          <h3 class="card__title" id="extract-heading">Source extraction</h3>
+          <p class="card__note">
+            Deterministic rules run first; only text they cannot resolve is escalated.
+          </p>
+        </div>
+      </div>
+
+      <div class="extract-grid">
+        <form id="extract-form">
+          <div class="field">
+            <label class="field__label" for="note-text">Note text</label>
+            <textarea id="note-text" placeholder="Paste a CRM note…">Spoke with them at our Mobile World Congress booth, no QR scan logged.</textarea>
+          </div>
+          <div class="samples" id="samples"></div>
+          <div class="pager__buttons" style="margin-top: var(--space-4)">
+            <button type="submit" class="primary">Extract source</button>
+          </div>
+        </form>
+
+        <div class="result-panel" id="extract-output">
+          <p class="state state--inline">Submit a note to see the extracted channel and the evidence behind it.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- -------------------------------------------------------- lead modal -->
+  <dialog id="lead-modal" aria-labelledby="modal-title">
+    <div class="modal__head">
+      <div>
+        <h2 class="modal__title" id="modal-title">Lead</h2>
+        <p class="modal__sub" id="modal-sub"></p>
+      </div>
+      <button type="button" class="modal__close" id="modal-close" aria-label="Close">Close</button>
+    </div>
+    <div class="modal__body" id="modal-body"></div>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -13,9 +13,12 @@ import io
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import config, db, loader, normalize as nz, repository
 from app.dedupe.pipeline import find_duplicates
@@ -63,6 +66,17 @@ app = FastAPI(
     summary="Lead store with AI-assisted duplicate detection and source extraction.",
     lifespan=lifespan,
 )
+
+# The browser console. It is a thin client: every figure it shows comes from the endpoints
+# below, and it holds no filtering, scoring or extraction logic of its own.
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def console() -> FileResponse:
+    """Serve the console shell. The page fetches its data from the JSON API."""
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 def get_conn() -> sqlite3.Connection:
