@@ -160,9 +160,12 @@ def next_lead_id(conn: sqlite3.Connection) -> str:
     """Allocate the next id.
 
     Ids come from the source system's `Record ID` and are numeric, so new leads continue the
-    sequence. That keeps ids stable, human-readable and sortable; a UUID would be safer
-    against concurrent writers, but this is a single-process service with no concurrent
-    writers.
+    sequence. That keeps ids stable, human-readable and sortable.
+
+    This reads the current maximum, so two simultaneous creates can allocate the same id.
+    Sync handlers run in a threadpool, so that is reachable within one process. Accepted at
+    this scope and recorded in the README; a production version would use a
+    database-generated identifier, a UUID, or transactional allocation.
     """
     row = conn.execute("SELECT MAX(CAST(id AS INTEGER)) AS m FROM leads").fetchone()
     return str((row["m"] or 100_000_000) + 1)

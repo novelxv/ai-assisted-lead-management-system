@@ -615,8 +615,9 @@ volume, and the observations are qualitative.
    `Other Campaigns`).
 6. **`q` searches name, company and email only** — deliberately not phone, since partial
    digit strings match too broadly to be useful.
-7. **Lead `id` is the source `Record ID`**; new leads continue the numeric sequence. A UUID
-   would be safer against concurrent writers, but this is a single-process service.
+7. **Lead `id` is the source `Record ID`**; new leads continue the numeric sequence, which
+   keeps ids stable and sortable. Allocation reads the current maximum, so it is not safe
+   against simultaneous creates — see [known limitations](#known-limitations).
 8. **Original source is immutable once confidently known.** Both ingest and `PATCH` may only
    fill it in when the stored value is unknown or flagged.
 9. **The `possible duplicate` note is an unverified human hint.** It is excluded from every
@@ -649,8 +650,11 @@ volume, and the observations are qualitative.
   revisited. The `method` and `needs_review` fields make that visible when it happens.
 - **Family-name changes** (e.g. after marriage) score as a conflict; an exact email or phone
   match still outweighs it, but a record with neither would be missed.
-- **Single-process, no concurrency control.** Two simultaneous ingests could race on
-  `next_lead_id`. Fine at this scale; a multi-writer deployment needs a sequence or a UUID.
+- **Concurrent writes are not serialized.** Two simultaneous create ingests can race while
+  allocating the next numeric lead ID, since allocation reads the current maximum. Sync
+  request handlers run in a threadpool, so this can happen inside a single process. That is
+  acceptable for the current scoped service; a production implementation should use a
+  database-generated identifier, a UUID, or transactional ID allocation.
 - **The LLM can be wrong on cases the rules get right.** Observed live: an explicit
   *"google ad"* note was classified `Organic Search`, and two near-identical review pairs got
   opposite verdicts. Both are contained, since the rules own the first case and no
@@ -681,10 +685,10 @@ volume, and the observations are qualitative.
 
 ## Testing
 
-The suite is offline and deterministic — no network, no credentials, and the LLM tier is
-mocked throughout (323 tests, a few seconds). The Gemini SDK ships in the optional `[llm]`
-extra, so the handful of tests that drive the SDK skip when it is not installed; everything
-else, including the LLM contract validation and prompt-boundary tests, runs either way.
+The suite is offline and deterministic — no network or credentials required, and the LLM
+tier is mocked throughout. It currently contains 329 tests; without the optional `[llm]`
+extra, 319 pass and 10 Gemini-SDK-specific tests are skipped. Everything else, including the
+LLM contract validation and prompt-boundary tests, runs either way.
 
 Coverage spans API behaviour, matching safety, source extraction, ingest policy and the LLM
 integration boundary. Real and synthetic cases are used together because they cover different

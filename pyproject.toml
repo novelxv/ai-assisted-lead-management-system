@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lead-management-system"
 version = "0.1.0"
-description = "AI-assisted mini lead management system: lead store + API, duplicate detection, source extraction"
+description = "AI-assisted lead management system: lead store + API, duplicate detection, source extraction"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",

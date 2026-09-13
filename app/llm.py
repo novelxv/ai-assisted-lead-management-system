@@ -209,11 +209,9 @@ class GeminiClient:
     def _generate(self, *, system: str, user: str, schema: type[BaseModel]) -> Any | None:
         """Make the SDK call, degrading to None on any failure.
 
-        The thinking preference is retried away once on an invalid-argument error: model
-        generations disagree about how it is expressed (2.5 takes a numeric budget, 3.x takes
-        a level), and losing the whole LLM tier because of a tuning parameter would be a poor
-        trade. This is not speculative — it is the exact failure seen when the API redirected
-        from the originally configured model to its replacement.
+        Gemini model variants may differ in the thinking configuration they accept. If the
+        configured thinking option is rejected, the request is retried once without it, so a
+        tuning parameter cannot disable the whole LLM tier.
         """
         for thinking in (True, False):
             try:

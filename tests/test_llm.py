@@ -386,11 +386,10 @@ def test_the_api_key_is_never_logged(gemini, caplog) -> None:
 
 @requires_sdk
 def test_an_invalid_argument_retries_once_without_the_thinking_preference(gemini) -> None:
-    """Model generations disagree on how the thinking preference is expressed.
+    """Model variants may reject the configured thinking option.
 
-    Losing the whole LLM tier over a tuning parameter would be a poor trade, so the call is
-    retried once without it. This is the exact failure seen when the API redirected from the
-    originally configured model to its replacement.
+    When that happens the call is retried once without it, so a tuning parameter cannot
+    disable the whole LLM tier.
     """
     genai = pytest.importorskip("google.genai")
 
