@@ -329,6 +329,44 @@ def test_a_bridged_group_is_flagged_and_demoted() -> None:
     assert any("conflict on identity" in reason for reason in group.reasons)
 
 
+def test_an_oversized_group_scores_from_its_own_edges(monkeypatch) -> None:
+    """Past `MAX_GROUP_SIZE_FOR_CONFLICT_CHECK` the intra-group re-check is skipped.
+
+    The fallback must take the weakest edge belonging to *this* group. Scanning every high
+    edge in the dataset would report the score and reasons of an unrelated pair, so a group
+    of near-identical records could be labelled with another cluster's evidence.
+
+    Not reachable on the provided data, where the largest group is 3, so the cap is lowered
+    here to exercise the branch.
+    """
+    monkeypatch.setattr(config, "MAX_GROUP_SIZE_FOR_CONFLICT_CHECK", 2)
+
+    # Three identical records: every internal edge scores 131.
+    big = [
+        make_lead("1", "Ama Asante", "ama.asante@acme.com", "+65 8000 1111"),
+        make_lead("2", "Ama Asante", "ama.asante@acme.com", "+65 8000 1111"),
+        make_lead("3", "Ama Asante", "ama.asante@acme.com", "+65 8000 1111"),
+    ]
+    # An unrelated pair whose edge is the lowest-scoring `high` edge in the dataset (92).
+    other = [
+        make_lead("9", "Jamal Diallo", "jamal.diallo@other.com", "+44 7700 900123",
+                  company="Other Ltd", country="France"),
+        make_lead("10", "J. Diallo", "j.diallo@other.com", "+44 7700 900123",
+                  company="Other Ltd", country="France"),
+    ]
+
+    result = find_duplicates(big + other)
+    by_size = {len(g.leads): g for g in result.groups}
+    assert set(by_size) == {2, 3}
+
+    triple = by_size[3]
+    assert triple.score == 131, "the group must be scored from its own weakest edge, not the global one"
+    assert all("Asante" in summary or "asante" in summary for summary in
+               [lead.summary() for lead in triple.leads])
+    # The unrelated pair keeps its own score.
+    assert by_size[2].score == 92
+
+
 def test_a_consistent_triple_is_not_flagged() -> None:
     """The mirror of the bridge test: no false alarm on a genuinely coherent group."""
     leads = [

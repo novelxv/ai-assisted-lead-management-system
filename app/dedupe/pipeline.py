@@ -184,8 +184,19 @@ def _build_groups(
                         f"{leads[a].display_name or leads[a].id} and "
                         f"{leads[b].display_name or leads[b].id} conflict on identity"
                     )
-        else:  # pragma: no cover - no group this large occurs at this data size
-            weakest = min((s for _, _, s in high_pairs), key=lambda s: s.score)
+        else:
+            # Past the size cap the intra-group re-check is skipped, so the group keeps its
+            # weakest *own* edge. `high_pairs` is global, so it must be filtered to this
+            # group first; scanning it whole would report the score and reasons of an
+            # unrelated pair. Internal conflicts go unchecked here, which is the cost the
+            # cap buys.
+            members_set = set(unique)
+            own_edges = [
+                score
+                for left, right, score in high_pairs
+                if left in members_set and right in members_set
+            ]
+            weakest = min(own_edges, key=lambda s: s.score)
 
         assert weakest is not None
         reasons = list(weakest.reasons)
