@@ -44,7 +44,7 @@ def test_unknown_status_is_none_not_a_guess(raw: str | None) -> None:
 
 
 def test_every_status_spelling_in_the_seed_file_is_recognised(seed_rows) -> None:
-    """The real file spells 7 statuses 34 ways. All of them must land in the taxonomy."""
+    """The real file spells 7 statuses 35 ways. All of them must land in the taxonomy."""
     raw_spellings = {row["Lead Status"] for row in seed_rows}
     assert len(raw_spellings) > 7, "fixture should still contain the messy spellings"
     normalized = {nz.normalize_status(v) for v in raw_spellings}

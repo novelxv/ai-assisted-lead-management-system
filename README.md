@@ -100,7 +100,7 @@ the decisions in this project.
 | Rows × columns | 2,049 × 22 |
 | **Columns empty in every single row** | `City`, `Original Source Drill-Down 1`, `Annual Revenue`, `Marketing contact status`, `GDPR consent` |
 | Sparse columns | `Lead Score` 7.5%, `Job Title` 60%, `Original Source` 50% blank |
-| `Lead Status` | **34 raw spellings of 7 values** (casing + surrounding whitespace) |
+| `Lead Status` | **35 raw spellings of 7 values** (casing + surrounding whitespace) |
 | `Contact Owner` | 10 people, 20 spellings (66 rows have a trailing space) |
 | `Country/Region` | 62 spellings of 35 countries |
 | Dates | 3 formats: `2026-06-02`, `2026-05-20T00:00:00Z`, `6/4/2026` |
@@ -120,8 +120,9 @@ but have different given names — `Femi` vs `Sophia Diallo`, `Erik` vs `Antoine
 beside a distinct Diego Johnson. Separating these two populations is the main difficulty in
 the matching design.
 
-**Form submissions** (90): 49 carry an email and phone identical to an existing lead and all
-of them carry the same zero-signal message; 41 are new people, 38 at companies already in the
+**Form submissions** (90): 49 carry an email and phone identical to an existing lead, and all
+of those carry the same zero-signal message. The other 41 do not match an existing lead by
+email; 38 of them share an email domain with one, so most reference an employer already in the
 file. `form_id`, `form_name` and `page_url` **contradict each other** — a `form_demo_request`
 named "Newsletter Signup" submitted from `/blog` — so none of them is trusted as evidence.
 
@@ -212,9 +213,10 @@ Weights live in [`app/config.py`](app/config.py) with the reasoning for each:
 
 Two properties follow from the weights themselves, without special-case code:
 
-- **Nothing reaches `high` without a contact key.** Name, company, country and date together
-  reach at most 66 against a `high` floor of 80, so a similar name at the same company cannot
-  clear the bar.
+- **Nothing reaches `high` without a contact key.** Every non-contact signal combined —
+  shared email domain, matching names, name-derived local parts, company, country and
+  creation date — reaches at most 62 against a `high` floor of 80, so a similar name at the
+  same company cannot clear the bar.
 - **A name conflict is −25**, so a shared handset or shared mailbox alone does not carry a
   pair over the floor. Reception desks, spouses and `info@` addresses all produce that
   pattern.
@@ -609,7 +611,7 @@ volume, and the observations are qualitative.
 4. **No source signal → `Other`, `detail: null`, `needs_review: true`.** The taxonomy has no
    `Unknown`, and detail is never fabricated.
 5. **Dashboard counts use the extracted channel**, not `Original Source` — that column is blank
-   for half the rows and actively misleading on others (21 booth conversations are tagged
+   for half the rows and actively misleading on others (31 booth notes are tagged
    `Other Campaigns`).
 6. **`q` searches name, company and email only** — deliberately not phone, since partial
    digit strings match too broadly to be useful.

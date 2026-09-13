@@ -27,7 +27,7 @@ def test_list_returns_a_page_and_the_unpaginated_total(client) -> None:
 
 
 def test_status_filter_is_case_insensitive(client) -> None:
-    """The export spells one status 34 ways; a caller should not have to guess which."""
+    """The export spells one status 35 ways; a caller should not have to guess which."""
     counts = {
         spelling: client.get("/leads", params={"status": spelling}).json()["total"]
         for spelling in ("Closed Won", "closed won", "CLOSED WON", "  closed won  ")

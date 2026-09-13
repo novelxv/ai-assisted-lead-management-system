@@ -7,8 +7,8 @@ label to act on, and the list of signals that produced it.
 
 Weights live in app/config.py with the reasoning behind each one. The shape that matters:
 
-* No amount of name, company, country and date agreement reaches the `high` band on its own
-  (the arithmetic maximum without a contact key is 66 against a bar of 80). Reaching `high`
+* No combination of non-contact evidence reaches the `high` band on its own
+  (the arithmetic maximum without a contact key is 62 against a bar of 80). Reaching `high`
   structurally requires an email or phone match — not as a special case, but as a property
   of the weights.
 * A name conflict is worth -25, so neither a shared handset nor a shared mailbox can carry

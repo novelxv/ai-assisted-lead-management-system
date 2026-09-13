@@ -73,7 +73,7 @@ _STATUS_LOOKUP = {fold_ascii(s): s for s in config.LEAD_STATUSES}
 def normalize_status(value: str | None) -> str | None:
     """Canonicalise a lead status, or return None if it is not in the taxonomy.
 
-    The seed file spells these 7 values 34 different ways (casing plus surrounding
+    The seed file spells these 7 values 35 different ways (casing plus surrounding
     whitespace). Callers decide what an unknown value means: the loader records it as-is in
     `raw_record` and leaves the column null, the API rejects it with a 422.
     """

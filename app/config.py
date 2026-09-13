@@ -28,7 +28,7 @@ LLM_CACHE_PATH = Path(os.environ.get("LLM_CACHE_PATH", PROJECT_ROOT / ".cache" /
 # --------------------------------------------------------------------------------------
 # Lead status taxonomy
 # --------------------------------------------------------------------------------------
-# The seed file contains 34 raw spellings of these 7 values (casing + surrounding whitespace),
+# The seed file contains 35 raw spellings of these 7 values (casing + surrounding whitespace),
 # e.g. "New", "new", "NEW", " New". We canonicalise to Title Case and keep the raw row in
 # `raw_record` so nothing is lost.
 
@@ -153,8 +153,9 @@ SIM_COMPANY_SIMILAR = 0.60   # token-set overlap, applied after legal-suffix str
 # the data. The check is a sanity test, not the derivation.
 #
 #   high   >= 80  Must require a contact key. Email (45) or phone (40) plus corroborating
-#                 name agreement clears it; name + company + country + date together reach
-#                 only 66, so no amount of soft agreement can get there. That structural
+#                 name agreement clears it; every non-contact signal combined (domain,
+#                 names, name-derived local parts, company, country, create date) reaches
+#                 only 62, so no amount of soft agreement can get there. That structural
 #                 property is the point of the number.
 #
 #   medium 35-79  "A human should look at this." An exact given + family name match is 27,
