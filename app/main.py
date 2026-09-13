@@ -1,9 +1,11 @@
 """FastAPI application.
 
 Route handlers stay thin: validation is Pydantic's job (app/models.py), SQL is the
-repository's (app/repository.py) and policy is the matching modules'. The interactive docs
-at /docs are the only UI: this is a backend service, so the effort went into the API
-contract instead.
+repository's (app/repository.py) and policy is the matching modules'. Two front doors are
+served: the console at / (app/static) and the interactive OpenAPI docs at /docs.
+
+Each request gets its own SQLite connection via the `get_conn` dependency; see the note
+there for why a shared connection is not viable.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ import logging
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Iterator
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
@@ -43,21 +45,21 @@ from app.models import (
 from app.repository import LeadFilters
 from app.source_extraction import extract_source, preserve_confident_source
 
-_connection: sqlite3.Connection | None = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Open the database and seed it on first run, so setup is `install` then `run`."""
-    global _connection
+    """Seed the database on first run, so setup is `install` then `run`.
+
+    The startup connection exists only for that work and is closed before any request is
+    served; request handlers open their own (see `get_conn`).
+    """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    _connection = db.connect()
-    loader.ensure_loaded(_connection)
+    conn = db.connect()
     try:
-        yield
+        loader.ensure_loaded(conn)
     finally:
-        _connection.close()
-        _connection = None
+        conn.close()
+    yield
 
 
 app = FastAPI(
@@ -79,10 +81,20 @@ def console() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
-def get_conn() -> sqlite3.Connection:
-    if _connection is None:  # pragma: no cover - only reachable outside the lifespan
-        raise RuntimeError("database connection is not initialised")
-    return _connection
+def get_conn() -> Iterator[sqlite3.Connection]:
+    """Open a SQLite connection for the lifetime of one request, then close it.
+
+    A single process-wide connection cannot be shared here. Route handlers are sync `def`,
+    so Starlette runs them in a threadpool and several can be in flight at once; concurrent
+    use of one connection and its cursors produces `sqlite3.InterfaceError`, rows read as
+    None, and corrupted tuples. Opening a file-backed SQLite connection is cheap, so a
+    connection per request is the simplest correct option and needs no pool.
+    """
+    conn = db.connect()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 Conn = Annotated[sqlite3.Connection, Depends(get_conn)]
